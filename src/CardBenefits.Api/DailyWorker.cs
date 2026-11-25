@@ -3,15 +3,17 @@ using CardBenefits.Application.Ports;
 using CardBenefits.Application.Reminders;
 using CardBenefits.Application.Sync;
 using CardBenefits.Infrastructure;
+using CardBenefits.Infrastructure.Catalog;
 
 namespace CardBenefits.Api;
 
 /// <summary>
 /// The background job. It wakes every few minutes and does whatever has come due:
-/// the daily sync, rolling the periods forward, reminders, and the nightly backup.
+/// the catalog refresh, the daily sync, rolling the periods forward, reminders, and the nightly backup.
 /// Each step decides for itself whether it is due, so a restart never repeats or skips one.
 /// </summary>
 internal sealed class DailyWorker(
+    CatalogRefresher catalog,
     ITransactionFeed feed,
     SyncService sync,
     Rematcher rematcher,
@@ -29,12 +31,22 @@ internal sealed class DailyWorker(
         using var timer = new PeriodicTimer(Interval);
         do
         {
+            await StepAsync("catalog", RefreshCatalogAsync, stoppingToken);
             await StepAsync("sync", SyncAsync, stoppingToken);
             await StepAsync("periods", RollPeriodsAsync, stoppingToken);
             await StepAsync("reminders", token => reminders.RunAsync(token), stoppingToken);
             await StepAsync("backup", token => backup.RunIfDueAsync(token), stoppingToken);
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));
+    }
+
+    /// <summary>A catalog that changed can change any period, so everything is replayed against it.</summary>
+    private async Task RefreshCatalogAsync(CancellationToken cancellationToken)
+    {
+        if (await catalog.RunIfDueAsync(cancellationToken))
+        {
+            await rematcher.RematchAllAsync(cancellationToken);
+        }
     }
 
     private async Task SyncAsync(CancellationToken cancellationToken)

@@ -47,7 +47,9 @@ public static class TrackerServices
         });
 
         services.AddSingleton<IClock>(new SystemClock(TimeZoneInfo.FindSystemTimeZoneById(options.TimeZone)));
-        services.AddSingleton<ICatalog>(_ => JsonCatalog.Load(options.CatalogPath));
+        services.AddSingleton(_ => LiveCatalog.Open(options));
+        services.AddSingleton<ICatalog>(provider => provider.GetRequiredService<LiveCatalog>());
+        services.AddHttpClient<CatalogRefresher>(http => http.Timeout = TimeSpan.FromMinutes(1));
 
         services.AddDbContextFactory<TrackerDbContext>(db => db.UseSqlite($"Data Source={options.DatabasePath}"));
         services.AddSingleton<ITrackerStore, SqliteTrackerStore>();

@@ -18,7 +18,8 @@ public sealed class TrackerQueries(ITrackerStore store, ICatalog catalog, IClock
         catalog.Products
             .OrderBy(product => product.DisplayName, StringComparer.OrdinalIgnoreCase)
             .Select(product => new ProductDto(
-                product.Id, product.DisplayName, product.AnnualFee.Dollars, product.IsBusiness, product.PointsProgram))
+                product.Id, product.DisplayName, product.AnnualFee.Dollars, product.IsBusiness, product.PointsProgram,
+                catalog.AliasesOf(product.Id) is { Count: > 0 } aliases ? aliases : null))
             .ToArray();
 
     public IReadOnlyList<BenefitDto> GetBenefits(string productId) =>

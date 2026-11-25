@@ -1,10 +1,11 @@
 namespace CardBenefits.Contracts;
 
 /// <summary>
-/// Finds card products from what a person types. People say "Citi World Executive" or
-/// "American Express Gold" where the catalog says "Citi AAdvantage Executive World Elite"
-/// or "Amex Gold", so words may come in any order, may be part of a word, and an issuer
-/// answers to its other names.
+/// Finds card products from what a person types. The catalog keeps the names its source
+/// uses, and people say "Citi World Executive" or "American Express Gold" where it says
+/// "Citi AAdvantage Executive" or "Amex Gold". So words may come in any order, may be
+/// part of a word, an issuer answers to its other names, and a product to the other
+/// names recorded for it.
 /// </summary>
 public static class ProductSearch
 {
@@ -34,7 +35,7 @@ public static class ProductSearch
             .Select(candidate => (
                 candidate.Product,
                 Hits: wanted.Count(word => candidate.Words.Any(known => known.Contains(word, StringComparison.Ordinal))),
-                Length: candidate.Words.Length))
+                Length: Words(candidate.Product.DisplayName).Length))
             .Where(candidate => candidate.Hits > 0)
             .ToArray();
 
@@ -51,6 +52,7 @@ public static class ProductSearch
             .Concat(Issuers
                 .Where(issuer => product.DisplayName.StartsWith(issuer.Issuer, StringComparison.OrdinalIgnoreCase))
                 .SelectMany(issuer => issuer.AlsoCalled))
+            .Concat((product.AlsoCalled ?? []).SelectMany(Words))
             .ToArray();
 
     private static string[] Words(string text) =>

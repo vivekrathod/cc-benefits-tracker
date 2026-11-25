@@ -8,6 +8,7 @@ using CardBenefits.Application.Sync;
 using CardBenefits.Application.Usage;
 using CardBenefits.Application.Views;
 using CardBenefits.Contracts;
+using CardBenefits.Infrastructure.Catalog;
 
 namespace CardBenefits.Api;
 
@@ -128,6 +129,21 @@ internal static class TrackerApi
         });
         api.MapGet("/catalog/products", (TrackerQueries queries) => queries.GetProducts());
         api.MapGet("/catalog/products/{id}/benefits", (string id, TrackerQueries queries) => queries.GetBenefits(id));
+        api.MapGet("/catalog/status", (LiveCatalog catalog, CatalogRefresher refresher) => ToDto(catalog.Status, refresher));
+        api.MapPost("/catalog/refresh", async (LiveCatalog catalog, CatalogRefresher refresher, Rematcher rematcher, CancellationToken ct) =>
+        {
+            if (!catalog.FollowsSource)
+            {
+                throw new RequestRejectedException("A fixed catalog file is configured, so there is no source to refresh from.");
+            }
+
+            if (await refresher.RunAsync(ct))
+            {
+                await rematcher.RematchAllAsync(ct);
+            }
+
+            return ToDto(catalog.Status, refresher);
+        });
 
         // Sync
         api.MapGet("/sync", async (TrackerQueries queries, SyncService sync, ITransactionFeed feed, CancellationToken ct) =>
@@ -149,6 +165,16 @@ internal static class TrackerApi
             return Results.NoContent();
         });
     }
+
+    private static CatalogStatusDto ToDto(CatalogStatus status, CatalogRefresher refresher) => new(
+        status.FollowsSource,
+        refresher.IsEnabled,
+        status.Source,
+        status.Products,
+        status.RetrievedAt,
+        status.CheckedAt,
+        status.Problem,
+        status.Flags);
 
     /// <summary>Turns the two failures a use case can signal into the status codes a client expects.</summary>
     private static async ValueTask<object?> TranslateFailuresAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)

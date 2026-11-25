@@ -5,7 +5,9 @@ namespace CardBenefits.Contracts;
 
 public sealed record PersonDto(Guid Id, string Name);
 
-public sealed record ProductDto(string Id, string DisplayName, decimal AnnualFee, bool IsBusiness, string? PointsProgram);
+/// <summary>A card product under the name its source gives it. <c>AlsoCalled</c> holds other names, for searching only.</summary>
+public sealed record ProductDto(
+    string Id, string DisplayName, decimal AnnualFee, bool IsBusiness, string? PointsProgram, IReadOnlyList<string>? AlsoCalled = null);
 
 public sealed record BenefitDto(
     string Id, string Name, bool Manual, decimal Amount, string Cadence, string YearBasis, string? Notes);
@@ -107,6 +109,16 @@ public sealed record SyncHealthDto(
     IReadOnlyList<SyncRunDto> RecentRuns);
 
 public sealed record SyncNowResponse(bool Started, DateTimeOffset? RetryAfter, SyncRunDto? Run);
+
+public sealed record CatalogStatusDto(
+    bool FollowsSource,
+    bool RefreshesItself,
+    string? Source,
+    int Products,
+    DateTimeOffset? RetrievedAt,
+    DateTimeOffset? CheckedAt,
+    string? Problem,
+    IReadOnlyList<string> Flags);
 
 public sealed record SummaryDto(int ExpiringSoon, int ReviewItems, int NewAccounts, int SyncProblems);
 

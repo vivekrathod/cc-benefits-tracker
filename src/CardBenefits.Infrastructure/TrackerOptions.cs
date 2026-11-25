@@ -6,8 +6,10 @@ public sealed class TrackerOptions
     /// <summary>Where the database and its backups live.</summary>
     public string DataDirectory { get; set; } = "data";
 
-    /// <summary>A catalog file to use instead of the built-in one.</summary>
+    /// <summary>A catalog file to use exactly as it is. With one set, the source is not followed and no corrections are applied.</summary>
     public string? CatalogPath { get; set; }
+
+    public CatalogOptions Catalog { get; set; } = new();
 
     /// <summary>The household's time zone: periods, "today" and the schedule all follow it.</summary>
     public string TimeZone { get; set; } = "America/New_York";
@@ -27,6 +29,18 @@ public sealed class TrackerOptions
     public SmtpOptions Smtp { get; set; } = new();
 
     public string DatabasePath => Path.Combine(DataDirectory, "tracker.db");
+
+    /// <summary>The latest copy of the catalog's source, as the refresh converted it.</summary>
+    public string CatalogSourceFile => Path.Combine(DataDirectory, "catalog-source.json");
+}
+
+public sealed class CatalogOptions
+{
+    /// <summary>The community dataset the catalog follows.</summary>
+    public string SourceUrl { get; set; } = Catalog.DatasetImporter.DatasetUrl;
+
+    /// <summary>How many days a copy of the source is used before it is fetched again. 0 never fetches.</summary>
+    public int RefreshDays { get; set; } = 7;
 }
 
 public sealed class SimpleFinOptions

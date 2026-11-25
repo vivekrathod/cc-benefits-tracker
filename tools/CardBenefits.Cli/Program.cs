@@ -27,6 +27,7 @@ const string Usage = """
       link-suggested                  Link new feed accounts to existing cards where exactly one card fits.
       sync                            Pull from the SimpleFIN Bridge now.
       replay                          Rebuild periods and matching from the stored transactions.
+      catalog                         Where the catalog stands against its source, and what a refresh flagged.
       claim <access-url-file>         Exchange a setup token (read from standard input) for the access URL file.
       import-catalog <dataset.json> <catalog.json>
                                       Convert the community benefits dataset into this project's catalog.
@@ -160,6 +161,31 @@ try
             await services.GetRequiredService<Rematcher>().RematchAllAsync(none);
             await PrintStatusAsync();
             return 0;
+
+        case "catalog":
+        {
+            // Read from the saved copy. The running service does the refreshing; see "Sync health" there.
+            var status = services.GetRequiredService<LiveCatalog>().Status;
+            Console.WriteLine($"Card products: {status.Products}");
+            Console.WriteLine(status switch
+            {
+                { FollowsSource: false } => "Source: a fixed catalog file is configured, so nothing is refreshed.",
+                { RetrievedAt: null } => $"Source: {status.Source}, as shipped with the app. No refresh has run yet.",
+                _ => $"Source: {status.Source}, fetched {clock.ToLocal(status.RetrievedAt.Value):yyyy-MM-dd HH:mm}.",
+            });
+            if (status.Problem is not null)
+            {
+                Console.WriteLine($"Problem: {status.Problem}");
+            }
+
+            Console.WriteLine(status.Flags.Count == 0 ? "Nothing flagged." : $"Flagged: {status.Flags.Count}");
+            foreach (var flag in status.Flags)
+            {
+                Console.WriteLine($"  - {flag}");
+            }
+
+            return 0;
+        }
 
         default:
             Console.WriteLine(Usage);

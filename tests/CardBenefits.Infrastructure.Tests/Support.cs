@@ -8,6 +8,8 @@ internal sealed class FixedClock : IClock
 
     public DateTimeOffset Now => ToLocal(new DateTimeOffset(2026, 11, 25, 15, 0, 0, TimeSpan.Zero));
 
+    public DateOnly Today => DateOnly.FromDateTime(Now.DateTime);
+
     public DateTimeOffset ToLocal(DateTimeOffset instant) => TimeZoneInfo.ConvertTime(instant, NewYork);
 
     public DateOnly ToLocalDate(DateTimeOffset instant) => DateOnly.FromDateTime(ToLocal(instant).DateTime);

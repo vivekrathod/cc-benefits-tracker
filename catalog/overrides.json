@@ -1,0 +1,145 @@
+{
+  "addProducts": [
+    {
+      "id": "other-card",
+      "issuer": "",
+      "name": "Other card (not in the catalog)",
+      "annualFee": 0,
+      "isBusiness": false,
+      "benefits": []
+    }
+  ],
+  "products": [
+    {
+      "id": "amex-blue-cash-everyday",
+      "benefits": [
+        {
+          "action": "remove",
+          "reason": "2026-11-25: no longer on the issuer's benefit pages.",
+          "id": "amex-blue-cash-everyday:home-chef-credit",
+          "writtenAgainst": "4b1144f764af"
+        }
+      ]
+    },
+    {
+      "id": "boa-atmos-rewards-summit",
+      "benefits": [
+        {
+          "action": "replace",
+          "reason": "2026-11-25: the passes are 2 per quarter that expire with the quarter, not 8 per cardmember year.",
+          "writtenAgainst": "42b3377e9566",
+          "benefit": {
+            "id": "boa-atmos-rewards-summit:alaska-lounge-passes",
+            "name": "Alaska Lounge passes",
+            "detection": "manual",
+            "terms": [
+              {
+                "effectiveFrom": "2000-01-01",
+                "amount": 0,
+                "cadence": "quarterly",
+                "yearBasis": "calendar"
+              }
+            ],
+            "notes": "2 Alaska Lounge day passes are issued each quarter (8 a year) and expire at the end of that quarter. Reviewed pages do not say whether the quarters follow the calendar or the account anniversary; calendar quarters are assumed."
+          }
+        },
+        {
+          "action": "add",
+          "reason": "2026-11-25: not in the source; reported by one review.",
+          "benefit": {
+            "id": "boa-atmos-rewards-summit:wifi-passes",
+            "name": "Inflight Wi-Fi passes",
+            "detection": "manual",
+            "terms": [
+              {
+                "effectiveFrom": "2000-01-01",
+                "amount": 0,
+                "cadence": "annual",
+                "yearBasis": "cardmember"
+              }
+            ],
+            "notes": "8 Alaska inflight Wi-Fi passes a year, reported by one review only; the issuer's cycle and expiry are not confirmed."
+          }
+        }
+      ]
+    },
+    {
+      "id": "citi-aadvantage-executive",
+      "aliases": [
+        "Citi / AAdvantage Executive World Legend Mastercard",
+        "Citi AAdvantage Executive World Elite Mastercard"
+      ]
+    },
+    {
+      "id": "citi-aadvantage-platinum-select-world-elite",
+      "benefits": [
+        {
+          "action": "add",
+          "reason": "2026-11-25: announced for the 2027-01-24 revamp, from news coverage. The $150 fee from that date is not modelled; set it on the card when it is charged.",
+          "benefit": {
+            "id": "citi-aadvantage-platinum-select-world-elite:inflight-credit",
+            "name": "Inflight purchase credit",
+            "detection": "automatic",
+            "terms": [
+              {
+                "effectiveFrom": "2027-01-24",
+                "amount": 100,
+                "cadence": "annual",
+                "yearBasis": "calendar"
+              }
+            ],
+            "rules": [
+              {
+                "keyword": "inflight",
+                "amountCeiling": 100,
+                "verified": false
+              }
+            ],
+            "notes": "Announced for the 24 January 2027 revamp (annual fee rises to $150): up to $100 per calendar year in statement credits for inflight food, drinks and Wi-Fi, replacing the 25% inflight discount. From news coverage, not yet on the issuer's page."
+          }
+        },
+        {
+          "action": "add",
+          "reason": "2026-11-25: announced for the 2027-01-24 revamp, from news coverage.",
+          "benefit": {
+            "id": "citi-aadvantage-platinum-select-world-elite:walmart-plus",
+            "name": "Walmart+ membership",
+            "detection": "manual",
+            "terms": [
+              {
+                "effectiveFrom": "2027-01-24",
+                "amount": 0,
+                "cadence": "annual",
+                "yearBasis": "calendar"
+              }
+            ],
+            "notes": "Announced for the 24 January 2027 revamp: an annual Walmart+ membership (about $98). How it is claimed and when it renews are not published yet."
+          }
+        }
+      ]
+    },
+    {
+      "id": "usbank-altitude-connect",
+      "benefits": [
+        {
+          "action": "add",
+          "reason": "2026-11-25: the source has it as a perk that applies itself, which the conversion leaves out; visits have to be listed to be remembered.",
+          "benefit": {
+            "id": "usbank-altitude-connect:priority-pass-visits",
+            "name": "Priority Pass lounge visits",
+            "detection": "manual",
+            "terms": [
+              {
+                "effectiveFrom": "2000-01-01",
+                "amount": 0,
+                "cadence": "annual",
+                "yearBasis": "cardmember"
+              }
+            ],
+            "notes": "4 free Priority Pass lounge visits per 12-month Priority Pass membership; enrol at prioritypass.com/usbankaltitudeconnect. The 12 months run from enrolment, which may differ from the card anniversary. The visit count comes from reviews; U.S. Bank's page does not state it."
+          }
+        }
+      ]
+    }
+  ]
+}

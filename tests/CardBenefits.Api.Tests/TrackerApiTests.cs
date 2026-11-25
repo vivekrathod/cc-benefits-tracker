@@ -20,7 +20,10 @@ public sealed class TrackerApiTests : IDisposable
 
     public TrackerApiTests()
     {
-        _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(host => host.UseSetting("Tracker:DataDirectory", _folder));
+        // The catalog's source lives on the internet, so the tests leave it alone.
+        _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(host => host
+            .UseSetting("Tracker:DataDirectory", _folder)
+            .UseSetting("Tracker:Catalog:RefreshDays", "0"));
         _client = _factory.CreateClient();
     }
 
@@ -60,6 +63,23 @@ public sealed class TrackerApiTests : IDisposable
         var refused = await _client.PostAsJsonAsync("/api/sync", new { }, Ct);
         Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
         Assert.Contains("not set up", await DetailAsync(refused));
+    }
+
+    [Fact]
+    public async Task The_catalog_keeps_the_sources_names_and_says_where_it_stands()
+    {
+        var products = await GetAsync<List<ProductDto>>("/api/catalog/products");
+        var executive = Assert.Single(products, product => product.Id == "citi-aadvantage-executive");
+        Assert.Equal("Citi AAdvantage Executive", executive.DisplayName);
+        Assert.Contains(executive.AlsoCalled!, name => name.Contains("World Legend", StringComparison.Ordinal));
+        Assert.Equal("citi-aadvantage-executive", ProductSearch.Find(products, "citi world executive")[0].Id);
+
+        // Nothing has been fetched yet and, in these tests, nothing will be: the shipped copy is in use.
+        var status = await GetAsync<CatalogStatusDto>("/api/catalog/status");
+        Assert.Equal((true, false, products.Count), (status.FollowsSource, status.RefreshesItself, status.Products));
+        Assert.Null(status.RetrievedAt);
+        Assert.Null(status.Problem);
+        Assert.Empty(status.Flags);
     }
 
     [Fact]

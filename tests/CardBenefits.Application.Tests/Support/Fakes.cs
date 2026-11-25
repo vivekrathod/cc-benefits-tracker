@@ -130,6 +130,8 @@ internal sealed class TestCatalog : ICatalog
 
     public BenefitDefinition? FindBenefit(string benefitId) => _benefits.FirstOrDefault(benefit => benefit.Id == benefitId);
 
+    public IReadOnlyList<string> AliasesOf(string productId) => productId == Reserve ? ["CSR"] : [];
+
     public string? NotesOf(string benefitId) => null;
 
     private static BenefitDefinition Benefit(

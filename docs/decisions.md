@@ -69,6 +69,26 @@ Short notes on the choices that are not obvious from the code, newest concerns f
   clamped date (the 31st in a 30-day month) never shifts the ones after it.
 - **Card value** counts a period in the cardmember year it ends in.
 
+## Catalog
+
+- **The source's names and ids are kept as they are.** The catalog follows a community
+  dataset that adds and renames cards all the time. Renaming a card here, even to the
+  issuer's official name, would break that link, so other names are aliases for the
+  search and nothing else.
+- **Corrections are an overlay, never edits.** `catalog/overrides.json` adds, replaces
+  or hides a benefit by the source's id and records a mark of the row it was written
+  against. A correction keeps winning when the source changes that row, and is flagged
+  so a person compares the two; silently taking the source's new row could undo a fix,
+  and silently keeping ours could hide the source catching up.
+- **The service refreshes the catalog itself, weekly**, instead of waiting for a new
+  build. A copy that fails to download, to parse, or that lost half its cards is
+  refused and the catalog in use stays.
+- **A refresh is not allowed to delete history.** Periods are rebuilt from the catalog,
+  so a benefit that vanished would take its recorded use with it. A dropped product
+  stays while a card has it and a dropped benefit stays, as ended, while it has use.
+  Renamed ids are not followed automatically: the old product is kept and flagged, and
+  a person moves the card.
+
 ## Structure
 
 - **One persistence port** (`ITrackerStore`) rather than a repository per aggregate:
@@ -87,7 +107,7 @@ Short notes on the choices that are not obvious from the code, newest concerns f
 
 - **No login.** The service is meant for a home network or a VPN.
 - **One background worker** wakes every ten minutes and runs whatever is due: the
-  daily sync, rolling periods forward, reminders, a nightly database copy. Each step
+  catalog refresh, the daily sync, rolling periods forward, reminders, a nightly database copy. Each step
   decides for itself whether it is due, so restarts neither repeat nor skip.
 - **Reminders are recorded when sent**, so a nudge goes out once per threshold; a
   failed send is forgotten and retried.

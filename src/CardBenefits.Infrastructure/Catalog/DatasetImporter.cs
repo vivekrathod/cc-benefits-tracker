@@ -36,11 +36,23 @@ public static class DatasetImporter
         ["OTHER"] = "",
     };
 
+    /// <summary>The dataset file the refresh downloads.</summary>
+    public const string DatasetUrl = "https://raw.githubusercontent.com/tiepnv2508/us-credit-card-benefits/main/exports/benefits.json";
+
+    private const int FormatRead = 2;
+
     /// <summary>Returns the catalog as JSON text, ready to save as catalog/catalog.json.</summary>
-    public static string Convert(Stream dataset)
+    public static string Convert(Stream dataset) => Read(dataset).ToJson();
+
+    internal static CatalogFile Read(Stream dataset)
     {
         using var document = JsonDocument.Parse(dataset);
         var root = document.RootElement;
+        if (root.TryGetProperty("schemaVersion", out var format) && (!format.TryGetInt32(out var version) || version != FormatRead))
+        {
+            throw new InvalidDataException($"The source is in format {format}, and this version reads format {FormatRead}.");
+        }
+
         var programs = root.TryGetProperty("programs", out var list) ? list : default;
 
         var products = root.GetProperty("cards").EnumerateArray()
@@ -48,8 +60,7 @@ public static class DatasetImporter
             .OrderBy(product => product.Id, StringComparer.Ordinal)
             .ToArray();
 
-        var file = new CatalogFile(SourceUrl, "MIT, see catalog/NOTICE.md", Payments, products);
-        return JsonSerializer.Serialize(file, CatalogFile.Json) + "\n";
+        return new CatalogFile(SourceUrl, "MIT, see catalog/NOTICE.md", Payments, products);
     }
 
     private static CatalogProduct ToProduct(JsonElement card, JsonElement programs)

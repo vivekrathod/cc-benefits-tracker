@@ -83,7 +83,7 @@ docker compose exec tracker dotnet cli/tracker.dll import-cards /data/cards.json
 }
 ```
 
-`product` is an id from `catalog/catalog.json`. `anniversary` (MM-dd) and `annualFee`
+`product` is an id from `catalog/catalog.json` (the source's own ids). `anniversary` (MM-dd) and `annualFee`
 are optional.
 
 ### Reminders
@@ -102,7 +102,9 @@ Everything is under the `Tracker` section (`Tracker__Name` as an environment var
 | `DataDirectory` | `data` | `tracker.db` and `backups/` (one copy a day, seven kept) |
 | `TimeZone` | `America/New_York` | Periods, "today" and the schedule follow it |
 | `TrackingStart` | one year back | Nothing before this date is tracked |
-| `CatalogPath` | built in | A catalog file to use instead of the built-in one |
+| `Catalog:RefreshDays` | `7` | Days between downloads of the catalog's source; `0` never downloads |
+| `Catalog:SourceUrl` | the community dataset | Where the catalog's source is downloaded from |
+| `CatalogPath` | none | A catalog file to use exactly as it is: no refresh, no corrections |
 | `SimpleFin:AccessUrlFile` | none | File holding the access URL |
 | `SimpleFin:DailyAt` | `05:17` | When the daily sync runs |
 | `SimpleFin:WindowDays` | `14` | Days each sync asks for, overlapping the last |
@@ -116,7 +118,7 @@ Everything is under the `Tracker` section (`Tracker__Name` as an environment var
 `tracker` prints counts and status, never transaction details or secrets.
 
 ```
-tracker status | cards | replay | sync
+tracker status | cards | replay | sync | catalog
 tracker import-cards <seed.json>
 tracker import-csv <card id or last four> <file.csv>
 tracker import-pull <saved-simplefin-response.json>
@@ -140,7 +142,7 @@ src/CardBenefits.Infrastructure  SQLite store, SimpleFIN and CSV feeds, catalog,
 src/CardBenefits.Api             composition root, HTTP routes, the daily worker
 src/CardBenefits.Web             the web app, served by the API
 tools/CardBenefits.Cli           the operator CLI
-catalog/                         card products, benefits and match rules
+catalog/                         the source's card products and benefits, and this project's corrections
 ```
 
 References point inward and tests enforce it. Matching is deterministic: clearing
@@ -166,9 +168,30 @@ repository.
 
 ## Catalog
 
-`catalog/catalog.json` started from the community dataset
+The card products and their benefits come from the community dataset
 [us-credit-card-benefits](https://github.com/tiepnv2508/us-credit-card-benefits) (MIT,
-see `catalog/NOTICE.md`). Its keywords are single words, so every rule is capped at
-the benefit's amount, and a rule nobody has verified against a real statement only
-suggests a match for a person to confirm. Amounts and terms change: check the entries
-for the cards you hold against the issuer's current terms.
+see `catalog/NOTICE.md`), and the tracker stays in step with it:
+
+- **Names and ids are the source's, untouched.** `catalog/catalog.json` is a plain
+  conversion of the dataset and is never edited by hand; a test fails if it is. Other
+  names for a card (the issuer's full legal name, what people call it) are recorded as
+  aliases, which only the search uses.
+- **Corrections live apart, in `catalog/overrides.json`**, keyed by the source's ids:
+  a benefit added, replaced or hidden, each with its reason and a mark of the source
+  row it was written against.
+- **The running service refreshes itself.** Once a week it downloads the dataset,
+  converts it, lays the corrections on top and replays the matching if anything
+  changed. The copy is kept in `catalog-source.json` in the data folder. "Sync health"
+  shows when it was last fetched and has a button to do it now.
+- **A refresh flags what needs a person**, on "Sync health" and in `tracker catalog`: a
+  correction whose source row has changed or gone since it was written (the correction
+  still wins), and anything kept after the source dropped it.
+- **A refresh never takes anything from a card.** A product the source dropped stays
+  while a card has it, and a dropped benefit stays, as ended, while use is recorded
+  against it. If the download fails or the file looks broken, the catalog in use stays
+  and the problem is shown.
+
+The dataset's keywords are single words, so every rule is capped at the benefit's
+amount, and a rule nobody has verified against a real statement only suggests a match
+for a person to confirm. The source is maintained by volunteers and its changes come in
+unreviewed: check the entries for the cards you hold against the issuer's current terms.

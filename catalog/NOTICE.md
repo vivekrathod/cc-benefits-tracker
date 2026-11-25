@@ -1,30 +1,17 @@
 # Catalog notice
 
-`catalog.json` is this project's own catalog of card products, their recurring
-benefits and the keywords that recognise their statement credits.
+`catalog.json` is a conversion of the community dataset at
+https://github.com/tiepnv2508/us-credit-card-benefits (file `exports/benefits.json`),
+made with `tracker import-catalog`. It is never edited by hand: the product names and
+ids are the dataset's, and the running tracker replaces it with a newer conversion of
+the same dataset every week. The dataset is published under the MIT licence,
+reproduced below as that licence requires.
 
-It was first generated from the community dataset at
-https://github.com/tiepnv2508/us-credit-card-benefits (file `exports/benefits.json`)
-with `tracker import-catalog`, and is corrected by hand from there. The dataset is
-published under the MIT licence, reproduced below as that licence requires.
+`overrides.json` holds this project's own corrections and additions, each with its
+reason, laid on top of the conversion when the catalog loads.
 
 Amounts and terms change. Treat every entry as a starting point and check it
 against the issuer's current terms for the cards you hold.
-
-Corrections made by hand, to carry over if the catalog is ever generated again:
-
-- 2026-11-25, Amex Blue Cash Everyday: Home Chef credit removed; it is no longer on
-  the issuer's benefit pages.
-- 2026-11-25, Atmos Rewards Summit: Alaska Lounge passes are 2 per quarter that
-  expire with the quarter, not 8 per cardmember year. Inflight Wi-Fi passes added.
-- 2026-11-25, U.S. Bank Altitude Connect: Priority Pass lounge visits added.
-- 2026-11-25, Citi AAdvantage Executive: renamed to its official "AAdvantage Executive
-  World Elite"; its benefits were checked against the issuer's page and stand.
-- 2026-11-25: "Other card (not in the catalog)" added, a product with no benefits for
-  cards the catalog does not list.
-- 2026-11-25, Citi AAdvantage Platinum Select: the inflight credit and Walmart+
-  membership announced for the 2027-01-24 revamp added, starting that day. The $150
-  fee from that date is not in the catalog; set it on the card when it is charged.
 
 ---
 

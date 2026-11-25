@@ -13,6 +13,9 @@ public interface ICatalog
 
     BenefitDefinition? FindBenefit(string benefitId);
 
+    /// <summary>Other names people know the product by, so a search finds it. The catalog keeps the source's own name.</summary>
+    IReadOnlyList<string> AliasesOf(string productId);
+
     /// <summary>A line on how the benefit works, shown next to it.</summary>
     string? NotesOf(string benefitId);
 

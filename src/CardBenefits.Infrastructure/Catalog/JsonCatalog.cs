@@ -1,10 +1,9 @@
-using System.Text.Json;
 using CardBenefits.Application.Ports;
 using CardBenefits.Domain;
 
 namespace CardBenefits.Infrastructure.Catalog;
 
-/// <summary>The catalog read from a JSON file: the one shipped inside the app, or one on disk.</summary>
+/// <summary>The catalog built from a catalog file, once its corrections have been laid on top.</summary>
 internal sealed class JsonCatalog : ICatalog
 {
     private readonly Dictionary<string, CardProduct> _products = [];
@@ -12,6 +11,7 @@ internal sealed class JsonCatalog : ICatalog
     private readonly Dictionary<string, BenefitDefinition> _benefits = [];
     private readonly Dictionary<string, string> _notes = [];
     private readonly Dictionary<string, int> _graceDays = [];
+    private readonly Dictionary<string, IReadOnlyList<string>> _aliases = [];
     private readonly List<MatchRule> _rules = [];
 
     public JsonCatalog(CatalogFile file)
@@ -23,6 +23,10 @@ internal sealed class JsonCatalog : ICatalog
             _products.Add(product.Id, new CardProduct(
                 product.Id, product.Issuer, product.Name, Money.FromDollars(product.AnnualFee), product.IsBusiness, product.PointsProgram));
             _benefitsByProduct.Add(product.Id, []);
+            if (product.Aliases is { Count: > 0 })
+            {
+                _aliases.Add(product.Id, product.Aliases);
+            }
 
             foreach (var benefit in product.Benefits)
             {
@@ -74,17 +78,17 @@ internal sealed class JsonCatalog : ICatalog
 
     public string? NotesOf(string benefitId) => _notes.GetValueOrDefault(benefitId);
 
-    /// <summary>The catalog built into the app, or the file at the path when one is given.</summary>
-    public static JsonCatalog Load(string? path)
+    public IReadOnlyList<string> AliasesOf(string productId) => _aliases.GetValueOrDefault(productId) ?? [];
+
+    /// <summary>The catalog shipped inside the app, with this project's corrections applied.</summary>
+    public static JsonCatalog BuiltIn() => new(CatalogOverrides.BuiltIn().Apply(CatalogFile.BuiltIn()).Catalog);
+
+    /// <summary>A catalog file on disk, taken exactly as it is.</summary>
+    public static JsonCatalog Load(string path)
     {
-        using var stream = string.IsNullOrWhiteSpace(path)
-            ? typeof(JsonCatalog).Assembly.GetManifestResourceStream("catalog.json")
-                ?? throw new InvalidOperationException("The built-in catalog is missing from the assembly.")
-            : File.OpenRead(path);
+        using var stream = File.OpenRead(path);
         return Read(stream);
     }
 
-    public static JsonCatalog Read(Stream stream) =>
-        new(JsonSerializer.Deserialize<CatalogFile>(stream, CatalogFile.Json)
-            ?? throw new InvalidOperationException("The catalog file is empty."));
+    public static JsonCatalog Read(Stream stream) => new(CatalogFile.Read(stream));
 }

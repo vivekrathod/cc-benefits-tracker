@@ -10,7 +10,9 @@ public class ProductSearchTests
         Product("amex-platinum", "Amex Platinum"),
         Product("boa-premium-rewards", "Bank of America Premium Rewards"),
         Product("chase-sapphire-preferred", "Chase Sapphire Preferred"),
-        Product("citi-aadvantage-executive", "Citi AAdvantage Executive World Elite"),
+        // The source's own name, with the issuer's official name and the old one as other names.
+        Product("citi-aadvantage-executive", "Citi AAdvantage Executive",
+            "Citi / AAdvantage Executive World Legend Mastercard", "Citi AAdvantage Executive World Elite Mastercard"),
         Product("citi-aadvantage-platinum-select-world-elite", "Citi AAdvantage Platinum Select World Elite"),
         Product("citi-strata", "Citi Strata"),
         Product("usbank-altitude-connect", "U.S. Bank Altitude Connect"),
@@ -58,5 +60,17 @@ public class ProductSearchTests
         Assert.Empty(ProductSearch.Find(Products, "zzzz"));
     }
 
-    private static ProductDto Product(string id, string name) => new(id, name, 0, false, null);
+    [Fact]
+    public void Other_names_help_find_a_card_but_do_not_push_it_down_the_list()
+    {
+        Assert.Equal("citi-aadvantage-executive", ProductSearch.Find(Products, "world legend")[0].Id);
+
+        // Both Citi cards carry two of the three words; the one with the shorter name of its own comes first.
+        Assert.Equal(
+            ["citi-aadvantage-executive", "citi-aadvantage-platinum-select-world-elite"],
+            ProductSearch.Find(Products, "citi world visa").Take(2).Select(product => product.Id));
+    }
+
+    private static ProductDto Product(string id, string name, params string[] alsoCalled) =>
+        new(id, name, 0, false, null, alsoCalled.Length == 0 ? null : alsoCalled);
 }

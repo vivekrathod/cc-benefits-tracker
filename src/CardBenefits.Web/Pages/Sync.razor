@@ -93,10 +93,48 @@
     <div class="actions">
         <button disabled="@_busy" @onclick="ReplayAsync">Rebuild matching from stored transactions</button>
     </div>
+
+    @if (_catalog is not null)
+    {
+        <h2>Card catalog</h2>
+        <div class="card">
+            <div><strong>@_catalog.Products</strong> card products, named as the source names them.</div>
+            @if (!_catalog.FollowsSource)
+            {
+                <div class="muted">A fixed catalog file is configured, so nothing is refreshed.</div>
+            }
+            else
+            {
+                <div class="muted">
+                    Source: <a href="@_catalog.Source" target="_blank" rel="noopener">community benefits dataset</a> ·
+                    @(_catalog.RetrievedAt is null ? "the copy shipped with the app, not refreshed yet" : $"last fetched {Format.Time(_catalog.RetrievedAt)}") ·
+                    @(_catalog.RefreshesItself ? "refreshes by itself" : "automatic refresh is off")
+                </div>
+                @if (_catalog.Problem is not null)
+                {
+                    <p class="error">The last refresh did not work, so the catalog is unchanged. @_catalog.Problem</p>
+                }
+                @if (_catalog.Flags.Count > 0)
+                {
+                    <p class="note">Worth a look after the last refresh:</p>
+                    <ul>
+                        @foreach (var flag in _catalog.Flags)
+                        {
+                            <li>@flag</li>
+                        }
+                    </ul>
+                }
+                <div class="actions">
+                    <button disabled="@_busy" @onclick="RefreshCatalogAsync">@(_busy ? "Working…" : "Refresh catalog now")</button>
+                </div>
+            }
+        </div>
+    }
 </Loader>
 
 @code {
     private SyncHealthDto? _health;
+    private CatalogStatusDto? _catalog;
     private string? _error;
     private string? _message;
     private bool _busy;
@@ -108,6 +146,7 @@
         try
         {
             _health = await Api.GetAsync<SyncHealthDto>("api/sync");
+            _catalog = await Api.GetAsync<CatalogStatusDto>("api/catalog/status");
             _error = null;
         }
         catch (Exception failure) when (failure is ApiException or HttpRequestException)
@@ -125,6 +164,12 @@
             { Failure: not null } => null,
             var run => $"Done: {run.Received} transactions received, {run.Changed} new or changed.",
         };
+    });
+
+    private Task RefreshCatalogAsync() => RunAsync(async () =>
+    {
+        var status = await Api.PostAsync<CatalogStatusDto>("api/catalog/refresh");
+        _message = status.Problem is null ? "The catalog was refreshed from its source." : null;
     });
 
     private Task ReplayAsync() => RunAsync(async () =>

@@ -8,7 +8,7 @@ namespace CardBenefits.Infrastructure.Tests;
 
 public class CatalogTests
 {
-    private const string Dataset = """
+    internal const string Dataset = """
         {
           "schemaVersion": 2,
           "programs": { "POINTS": { "name": "Example Points" } },
@@ -83,7 +83,7 @@ public class CatalogTests
     public void The_built_in_catalog_loads_and_every_entry_satisfies_the_domain()
     {
         // Building the catalog runs every product and benefit through the domain's own checks.
-        var catalog = JsonCatalog.Load(null);
+        var catalog = JsonCatalog.BuiltIn();
 
         Assert.True(catalog.Products.Count > 200);
         Assert.NotNull(catalog.FindProduct("amex-gold"));
@@ -111,12 +111,12 @@ public class CatalogTests
     [InlineData("Chase Bank", "TOTAL CHECKING (1234)", null)]
     public void The_built_in_catalog_recognises_accounts_the_way_institutions_name_them(
         string connection, string account, string? expected) =>
-        Assert.Equal(expected, ProductSuggester.Suggest(connection, account, JsonCatalog.Load(null).Products)?.Id);
+        Assert.Equal(expected, ProductSuggester.Suggest(connection, account, JsonCatalog.BuiltIn().Products)?.Id);
 
     [Fact]
     public void Entries_corrected_against_the_issuers_terms_stay_corrected()
     {
-        var catalog = JsonCatalog.Load(null);
+        var catalog = JsonCatalog.BuiltIn();
         // Two Alaska Lounge passes arrive each quarter and lapse with it; they are not a yearly bundle.
         var lounge = catalog.FindBenefit("boa-atmos-rewards-summit:alaska-lounge-passes");
         Assert.NotNull(lounge);
@@ -139,22 +139,42 @@ public class CatalogTests
     [Fact]
     public void A_card_the_catalog_does_not_know_can_still_be_added()
     {
-        var other = JsonCatalog.Load(null).FindProduct("other-card");
+        var other = JsonCatalog.BuiltIn().FindProduct("other-card");
 
         Assert.NotNull(other);
         Assert.Equal("Other card (not in the catalog)", other.DisplayName);
-        Assert.Empty(JsonCatalog.Load(null).BenefitsOf("other-card"));
+        Assert.Empty(JsonCatalog.BuiltIn().BenefitsOf("other-card"));
     }
 
     [Fact]
-    public void A_product_carries_its_official_name_so_people_find_it()
+    public void A_product_keeps_the_sources_name_and_is_still_found_by_its_other_names()
     {
-        var products = JsonCatalog.Load(null).Products
-            .Select(product => new CardBenefits.Contracts.ProductDto(product.Id, product.DisplayName, 0, product.IsBusiness, null))
+        var catalog = JsonCatalog.BuiltIn();
+        var products = catalog.Products
+            .Select(product => new CardBenefits.Contracts.ProductDto(
+                product.Id, product.DisplayName, 0, product.IsBusiness, null, catalog.AliasesOf(product.Id)))
             .ToArray();
 
+        Assert.Equal("Citi AAdvantage Executive", catalog.FindProduct("citi-aadvantage-executive")!.DisplayName);
         Assert.Equal("citi-aadvantage-executive", CardBenefits.Contracts.ProductSearch.Find(products, "Citi World Executive")[0].Id);
+        Assert.Equal("citi-aadvantage-executive", CardBenefits.Contracts.ProductSearch.Find(products, "executive world legend mastercard")[0].Id);
         Assert.Equal("amex-gold", CardBenefits.Contracts.ProductSearch.Find(products, "american express gold card")[0].Id);
+    }
+
+    [Fact]
+    public void The_shipped_catalog_is_the_source_untouched_and_every_correction_still_fits_it()
+    {
+        var source = CatalogFile.BuiltIn();
+        using var shipped = typeof(JsonCatalog).Assembly.GetManifestResourceStream("catalog.json")!;
+        using var reader = new StreamReader(shipped);
+
+        // Written out again it is the same text: nobody edited it by hand, so a refresh loses nothing.
+        Assert.Equal(reader.ReadToEnd(), source.ToJson());
+
+        // A flag here means the source moved under a correction; the message carries the new mark.
+        var (corrected, flags) = CatalogOverrides.BuiltIn().Apply(source);
+        Assert.Empty(flags);
+        Assert.Equal(source.Products.Count + 1, corrected.Products.Count);
     }
 
     [Fact]
