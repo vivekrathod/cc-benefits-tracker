@@ -7,9 +7,15 @@
 <Loader Ready="@(_cards is not null)" Error="@_error">
     <h2>People</h2>
     <div class="card">
-        @if (_people!.Count > 0)
+        @foreach (var person in _people!)
         {
-            <div>@string.Join(", ", _people.Select(person => person.Name))</div>
+            <div class="fields">
+                <div><input value="@person.Name" @onchange="change => RenameAsync(person.Id, change.Value as string)" aria-label="Name" /></div>
+            </div>
+        }
+        @if (_people.Count > 0)
+        {
+            <div class="muted">Edit a name in place to rename.</div>
         }
         <div class="fields">
             <div><label>Add a person</label><input @bind="_newPerson" placeholder="Name" /></div>
@@ -103,6 +109,9 @@
         await Api.PostAsync("api/people", new AddPersonRequest(_newPerson));
         _newPerson = "";
     });
+
+    private Task RenameAsync(Guid personId, string? name) =>
+        RunAsync(() => Api.PutAsync($"api/people/{personId}", new AddPersonRequest(name ?? "")));
 
     private Task AddCardAsync() => RunAsync(async () =>
     {

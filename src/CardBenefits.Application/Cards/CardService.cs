@@ -27,6 +27,23 @@ public sealed class CardService(ITrackerStore store, ICatalog catalog, Rematcher
         return person;
     }
 
+    public async Task<Person> RenamePersonAsync(Guid personId, string name, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new RequestRejectedException("A person needs a name.");
+        }
+
+        if ((await store.GetPeopleAsync(cancellationToken)).All(person => person.Id != personId))
+        {
+            throw new NotFoundException("The person");
+        }
+
+        var renamed = new Person(personId, name);
+        await store.SavePersonAsync(renamed, cancellationToken);
+        return renamed;
+    }
+
     /// <summary>The accounts nobody has decided on yet, each with what the service could work out.</summary>
     public async Task<IReadOnlyList<NewAccountDto>> GetNewAccountsAsync(CancellationToken cancellationToken)
     {
@@ -63,7 +80,7 @@ public sealed class CardService(ITrackerStore store, ICatalog catalog, Rematcher
                 account.Name,
                 account.LastFour,
                 transactions.Count,
-                product is not null || ProductSuggester.LooksLikeCard(account.Name),
+                product is not null || ProductSuggester.LooksLikeCard(account.Name) || ReceivesCardPayments(transactions),
                 product?.Id,
                 sameProduct,
                 feeDate?.Month,
@@ -214,6 +231,14 @@ public sealed class CardService(ITrackerStore store, ICatalog catalog, Rematcher
 
         await store.DeleteCardAsync(card.Id, cancellationToken);
     }
+
+    /// <summary>
+    /// A card whose feed name is just the cardholder still gives itself away: money comes
+    /// in as bill payments, which the catalog already knows how to recognise.
+    /// </summary>
+    private bool ReceivesCardPayments(IEnumerable<StoredTransaction> transactions) =>
+        transactions.Any(transaction => transaction.Amount > Money.Zero
+            && catalog.IgnoreKeywords.Any(keyword => transaction.Description.Contains(keyword, StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>
     /// The day the annual fee last posted, when the stored transactions show one. Issuers

@@ -43,12 +43,12 @@ Tailscale; do not expose the port to the internet.
 2. Claim it. The access URL is written to the secrets folder and never shown:
 
    ```sh
-   docker compose run --rm -T --entrypoint dotnet tracker cli/tracker.dll claim /tmp/access-url < token.txt
+   docker compose run --rm -T -v "$PWD/secrets:/out" --entrypoint dotnet tracker \
+     cli/tracker.dll claim /out/simplefin-access-url < token.txt
    ```
 
-   That writes inside the container, so it is simpler to claim on the host with the
-   .NET SDK: `dotnet run --project tools/CardBenefits.Cli -- claim secrets/simplefin-access-url < token.txt`.
-   Any other way of producing the file works too: it holds the access URL on one line.
+   Any other way of producing the file works too: it holds the access URL on one line,
+   readable only by its owner.
 3. Restart the container. The first sync runs at the next daily slot, or press **Sync now**.
 
 The access URL is a credential to bank data. It lives only in that file: not in

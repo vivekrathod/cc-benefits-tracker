@@ -16,7 +16,8 @@ public class CardTests
         tracker.Feed
             .Account("a1", "Chase Sapphire Preferred (4321)", "Chase", Posted("fee", "2026-10-01", -95, "ANNUAL MEMBERSHIP FEE"))
             .Account("a2", "Everyday Checking (9999)", "Chase")
-            .Account("a3", "Sapphire Reserve Visa Infinite (1111)", "Chase");
+            .Account("a3", "Sapphire Reserve Visa Infinite (1111)", "Chase")
+            .Account("a4", "A. Holder (2222)", "Chase", Posted("pay", "2026-11-02", 410, "Payment Thank You - Web"));
         await tracker.SyncAsync();
 
         var queue = await tracker.Cards.GetNewAccountsAsync(Ct);
@@ -30,6 +31,11 @@ public class CardTests
         Assert.Null(checking.SuggestedProductId);
         Assert.False(checking.LooksLikeCard);
         Assert.Equal(checking, queue[^1]);
+
+        // Named after the cardholder only, but it receives bill payments, so it is a card.
+        var unnamed = Assert.Single(queue, account => account.LastFour == "2222");
+        Assert.Null(unnamed.SuggestedProductId);
+        Assert.True(unnamed.LooksLikeCard);
 
         Assert.Equal(TestCatalog.Reserve, Assert.Single(queue, account => account.LastFour == "1111").SuggestedProductId);
     }
@@ -168,5 +174,9 @@ public class CardTests
             new AddCardRequest(Guid.NewGuid(), TestCatalog.Gold, DateOnly.Parse("2026-01-01"), null, null, null, null), Ct));
         await Assert.ThrowsAsync<RequestRejectedException>(() => tracker.Cards.AddPersonAsync("  ", Ct));
         Assert.Equal(alex.Id, (await tracker.Cards.AddPersonAsync("alex", Ct)).Id);
+
+        await tracker.Cards.RenamePersonAsync(alex.Id, "Alexandra", Ct);
+        Assert.Equal(["Alexandra"], (await tracker.Queries.GetPeopleAsync(Ct)).Select(person => person.Name));
+        await Assert.ThrowsAsync<NotFoundException>(() => tracker.Cards.RenamePersonAsync(Guid.NewGuid(), "Nobody", Ct));
     }
 }

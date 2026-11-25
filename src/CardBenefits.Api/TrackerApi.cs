@@ -86,6 +86,11 @@ internal static class TrackerApi
             var person = await cards.AddPersonAsync(request.Name, ct);
             return Results.Ok(new PersonDto(person.Id, person.Name));
         });
+        api.MapPut("/people/{id:guid}", async (Guid id, AddPersonRequest request, CardService cards, CancellationToken ct) =>
+        {
+            var person = await cards.RenamePersonAsync(id, request.Name, ct);
+            return Results.Ok(new PersonDto(person.Id, person.Name));
+        });
         api.MapGet("/cards", (TrackerQueries queries, CancellationToken ct) => queries.GetCardsAsync(ct));
         api.MapPost("/cards", async (AddCardRequest request, CardService cards, CancellationToken ct) =>
             Results.Ok((await cards.AddCardAsync(request, ct)).Id));
