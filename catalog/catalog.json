@@ -68,32 +68,6 @@
             }
           ],
           "notes": "Monthly subscriptions at DisneyPlus.com, Hulu.com or Stream.ESPN.com (incl. bundles); no minimum spend."
-        },
-        {
-          "id": "amex-blue-cash-everyday:home-chef-credit",
-          "name": "Home Chef credit",
-          "detection": "automatic",
-          "terms": [
-            {
-              "effectiveFrom": "2000-01-01",
-              "amount": 15,
-              "cadence": "monthly",
-              "yearBasis": "calendar"
-            }
-          ],
-          "rules": [
-            {
-              "keyword": "home",
-              "amountCeiling": 15,
-              "verified": false
-            },
-            {
-              "keyword": "chef",
-              "amountCeiling": 15,
-              "verified": false
-            }
-          ],
-          "notes": "Up to $15/month on a Home Chef meal-kit subscription bought online at homechef.com/blue-cash-everyday (48 contiguous states \u002B DC); enrollment required. Still in the card benefit terms but not shown on the current product page; unconfirmed."
         }
       ]
     },
@@ -2756,11 +2730,25 @@
             {
               "effectiveFrom": "2000-01-01",
               "amount": 0,
+              "cadence": "quarterly",
+              "yearBasis": "calendar"
+            }
+          ],
+          "notes": "2 Alaska Lounge day passes are issued each quarter (8 a year) and expire at the end of that quarter. Reviewed pages do not say whether the quarters follow the calendar or the account anniversary; calendar quarters are assumed."
+        },
+        {
+          "id": "boa-atmos-rewards-summit:wifi-passes",
+          "name": "Inflight Wi-Fi passes",
+          "detection": "manual",
+          "terms": [
+            {
+              "effectiveFrom": "2000-01-01",
+              "amount": 0,
               "cadence": "annual",
               "yearBasis": "cardmember"
             }
           ],
-          "notes": "8 Alaska Lounge day passes each card anniversary year."
+          "notes": "8 Alaska inflight Wi-Fi passes a year, reported by one review only; the issuer's cycle and expiry are not confirmed."
         }
       ]
     },
@@ -6907,7 +6895,22 @@
       "annualFee": 0,
       "isBusiness": false,
       "pointsProgram": "U.S. Bank Rewards",
-      "benefits": []
+      "benefits": [
+        {
+          "id": "usbank-altitude-connect:priority-pass-visits",
+          "name": "Priority Pass lounge visits",
+          "detection": "manual",
+          "terms": [
+            {
+              "effectiveFrom": "2000-01-01",
+              "amount": 0,
+              "cadence": "annual",
+              "yearBasis": "cardmember"
+            }
+          ],
+          "notes": "4 free Priority Pass lounge visits per 12-month Priority Pass membership; enrol at prioritypass.com/usbankaltitudeconnect. The 12 months run from enrolment, which may differ from the card anniversary. The visit count comes from reviews; U.S. Bank's page does not state it."
+        }
+      ]
     },
     {
       "id": "usbank-altitude-go",

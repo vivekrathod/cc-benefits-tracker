@@ -11,6 +11,14 @@ published under the MIT licence, reproduced below as that licence requires.
 Amounts and terms change. Treat every entry as a starting point and check it
 against the issuer's current terms for the cards you hold.
 
+Corrections made by hand, to carry over if the catalog is ever generated again:
+
+- 2026-11-25, Amex Blue Cash Everyday: Home Chef credit removed; it is no longer on
+  the issuer's benefit pages.
+- 2026-11-25, Atmos Rewards Summit: Alaska Lounge passes are 2 per quarter that
+  expire with the quarter, not 8 per cardmember year. Inflight Wi-Fi passes added.
+- 2026-11-25, U.S. Bank Altitude Connect: Priority Pass lounge visits added.
+
 ---
 
 MIT License

@@ -114,6 +114,24 @@ public class CatalogTests
         Assert.Equal(expected, ProductSuggester.Suggest(connection, account, JsonCatalog.Load(null).Products)?.Id);
 
     [Fact]
+    public void Entries_corrected_against_the_issuers_terms_stay_corrected()
+    {
+        var catalog = JsonCatalog.Load(null);
+        // Two Alaska Lounge passes arrive each quarter and lapse with it; they are not a yearly bundle.
+        var lounge = catalog.FindBenefit("boa-atmos-rewards-summit:alaska-lounge-passes");
+        Assert.NotNull(lounge);
+        Assert.Equal(Cadence.Quarterly, Assert.Single(lounge.Terms).Cadence);
+
+        // Not a statement credit, so it has to be listed to be remembered at all.
+        var visits = catalog.FindBenefit("usbank-altitude-connect:priority-pass-visits");
+        Assert.NotNull(visits);
+        Assert.Equal(DetectionMode.Manual, visits.Detection);
+
+        // No longer on the issuer's benefit pages.
+        Assert.Null(catalog.FindBenefit("amex-blue-cash-everyday:home-chef-credit"));
+    }
+
+    [Fact]
     public void A_catalog_file_on_disk_replaces_the_built_in_one()
     {
         using var folder = new TempFolder();
