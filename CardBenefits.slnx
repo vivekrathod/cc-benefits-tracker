@@ -2,11 +2,17 @@
   <Folder Name="/src/">
     <Project Path="src/CardBenefits.Api/CardBenefits.Api.csproj" />
     <Project Path="src/CardBenefits.Application/CardBenefits.Application.csproj" />
+    <Project Path="src/CardBenefits.Contracts/CardBenefits.Contracts.csproj" />
     <Project Path="src/CardBenefits.Domain/CardBenefits.Domain.csproj" />
     <Project Path="src/CardBenefits.Infrastructure/CardBenefits.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/CardBenefits.Cli/CardBenefits.Cli.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/CardBenefits.Api.Tests/CardBenefits.Api.Tests.csproj" />
+    <Project Path="tests/CardBenefits.Application.Tests/CardBenefits.Application.Tests.csproj" />
     <Project Path="tests/CardBenefits.Domain.Tests/CardBenefits.Domain.Tests.csproj" />
+    <Project Path="tests/CardBenefits.Infrastructure.Tests/CardBenefits.Infrastructure.Tests.csproj" />
   </Folder>
 </Solution>

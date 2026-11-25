@@ -36,13 +36,58 @@ public sealed class Card
     public DateOnly? ClosedOn { get; private set; }
 
     /// <summary>The start of the cardmember year. It survives a product change.</summary>
-    public Anniversary Anniversary { get; }
+    public Anniversary Anniversary { get; private set; }
+
+    /// <summary>What this card is actually charged a year, when it differs from the product's list fee.</summary>
+    public Money? AnnualFeeOverride { get; private set; }
 
     public IReadOnlyList<ProductAssignment> Products => _products;
 
     public string CurrentProductId => _products[^1].ProductId;
 
     public bool IsClosed => ClosedOn is not null;
+
+    /// <summary>Rebuilds a stored card with its product history.</summary>
+    public static Card Restore(
+        Guid id,
+        Guid personId,
+        string? lastFour,
+        DateOnly openedOn,
+        DateOnly? closedOn,
+        Anniversary anniversary,
+        Money? annualFeeOverride,
+        IEnumerable<ProductAssignment> products)
+    {
+        var ordered = products.OrderBy(assignment => assignment.From).ToArray();
+        if (ordered.Length == 0)
+        {
+            throw new ArgumentException("A card needs at least one product.", nameof(products));
+        }
+
+        var card = new Card(id, personId, ordered[0].ProductId, openedOn, anniversary, lastFour)
+        {
+            ClosedOn = closedOn,
+            AnnualFeeOverride = annualFeeOverride,
+        };
+        card._products.AddRange(ordered.Skip(1));
+        return card;
+    }
+
+    public void CorrectAnniversary(Anniversary anniversary) => Anniversary = anniversary;
+
+    public void SetAnnualFee(Money? annualFee)
+    {
+        if (annualFee < Money.Zero)
+        {
+            throw new ArgumentException("An annual fee cannot be negative.", nameof(annualFee));
+        }
+
+        AnnualFeeOverride = annualFee;
+    }
+
+    /// <summary>The first day of the cardmember year that contains the date.</summary>
+    public DateOnly CardmemberYearStart(DateOnly date) =>
+        Anniversary.In(date.Year) <= date ? Anniversary.In(date.Year) : Anniversary.In(date.Year - 1);
 
     public void ChangeProduct(string productId, DateOnly on)
     {

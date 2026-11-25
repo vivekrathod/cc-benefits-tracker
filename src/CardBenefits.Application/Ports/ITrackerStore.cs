@@ -22,6 +22,9 @@ public interface ITrackerStore
 
     Task SaveCardAsync(Card card, CancellationToken cancellationToken);
 
+    /// <summary>Removes a card with its periods and review items. Its feed accounts stay.</summary>
+    Task DeleteCardAsync(Guid cardId, CancellationToken cancellationToken);
+
     // Feed accounts
     Task<IReadOnlyList<FeedAccount>> GetFeedAccountsAsync(CancellationToken cancellationToken);
 
@@ -31,16 +34,16 @@ public interface ITrackerStore
 
     // Transactions
     /// <summary>
-    /// Inserts new transactions and overwrites stored ones whose content changed.
-    /// Returns how many rows were inserted or changed.
+    /// Inserts new transactions and overwrites stored ones whose content changed. Stored
+    /// pending transactions missing from the batch are removed: they either posted under
+    /// a new id or were dropped. Returns how many rows were inserted, changed or removed.
     /// </summary>
     Task<int> UpsertTransactionsAsync(
         Guid feedAccountId, IReadOnlyCollection<FeedTransaction> transactions, DateTimeOffset seenAt, CancellationToken cancellationToken);
 
     Task DeleteTransactionsAsync(Guid feedAccountId, CancellationToken cancellationToken);
 
-    /// <summary>Every stored transaction on the feed accounts mapped to the card.</summary>
-    Task<IReadOnlyList<CardTransaction>> GetCardTransactionsAsync(Guid cardId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<StoredTransaction>> GetTransactionsAsync(Guid feedAccountId, CancellationToken cancellationToken);
 
     Task<StoredTransaction?> FindTransactionAsync(Guid transactionId, CancellationToken cancellationToken);
 
@@ -64,9 +67,14 @@ public interface ITrackerStore
     Task ReplaceReviewItemsAsync(Guid cardId, IReadOnlyCollection<ReviewFlag> flags, CancellationToken cancellationToken);
 
     /// <summary>Decisions by transaction id: a benefit id, or null for "not a benefit".</summary>
-    Task<IReadOnlyDictionary<Guid, string?>> GetPinsAsync(Guid cardId, CancellationToken cancellationToken);
+    Task<IReadOnlyDictionary<Guid, string?>> GetPinsAsync(CancellationToken cancellationToken);
 
     Task SavePinAsync(Guid transactionId, string? benefitId, CancellationToken cancellationToken);
+
+    /// <summary>Flags a person has seen and accepted, so a replay does not raise them again.</summary>
+    Task<IReadOnlySet<(Guid TransactionId, ReviewReason Reason)>> GetAcknowledgedFlagsAsync(CancellationToken cancellationToken);
+
+    Task AcknowledgeFlagAsync(Guid transactionId, ReviewReason reason, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<MatchRule>> GetLearnedRulesAsync(CancellationToken cancellationToken);
 
@@ -83,8 +91,20 @@ public interface ITrackerStore
 
     // Reminders already sent, so a nudge goes out once
     Task<bool> TryRecordReminderAsync(string key, DateTimeOffset sentAt, CancellationToken cancellationToken);
+
+    Task ForgetReminderAsync(string key, CancellationToken cancellationToken);
+
+    /// <summary>Writes a consistent copy of the whole database to a file.</summary>
+    Task BackupAsync(string path, CancellationToken cancellationToken);
 }
 
-/// <summary>A stored transaction with the account it belongs to, for the review queue.</summary>
+/// <summary>A transaction as stored, with the feed account it came from.</summary>
 public sealed record StoredTransaction(
-    Guid Id, Guid FeedAccountId, Guid? CardId, DateOnly? PostedOn, Money Amount, string Description, bool Pending);
+    Guid Id,
+    Guid FeedAccountId,
+    string FeedId,
+    DateOnly? PostedOn,
+    DateOnly? TransactedOn,
+    Money Amount,
+    string Description,
+    bool Pending);

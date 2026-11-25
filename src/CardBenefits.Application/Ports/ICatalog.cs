@@ -13,9 +13,15 @@ public interface ICatalog
 
     BenefitDefinition? FindBenefit(string benefitId);
 
+    /// <summary>A line on how the benefit works, shown next to it.</summary>
+    string? NotesOf(string benefitId);
+
     /// <summary>Rules shipped with the catalog. Rules a person creates live in the store.</summary>
     IReadOnlyList<MatchRule> Rules { get; }
 
     /// <summary>Descriptions the matcher skips outright, such as card payments.</summary>
     IReadOnlyList<string> IgnoreKeywords { get; }
+
+    /// <summary>Grace windows that differ from the default, by benefit id.</summary>
+    IReadOnlyDictionary<string, int> GraceDays { get; }
 }

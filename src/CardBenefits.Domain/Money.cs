@@ -5,6 +5,8 @@ public readonly record struct Money(long Cents) : IComparable<Money>
 {
     public static Money Zero => new(0);
 
+    public decimal Dollars => Cents / 100m;
+
     public static Money FromDollars(decimal dollars)
     {
         var cents = dollars * 100m;

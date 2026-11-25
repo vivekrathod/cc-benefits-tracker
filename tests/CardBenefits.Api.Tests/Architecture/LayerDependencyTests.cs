@@ -18,11 +18,21 @@ public class LayerDependencyTests
     }
 
     [Fact]
-    public void Application_references_only_the_domain()
+    public void Contracts_reference_no_project_and_no_package()
+    {
+        var contracts = ProjectFile.Load("CardBenefits.Contracts");
+
+        Assert.Empty(contracts.ProjectReferences);
+        Assert.Empty(contracts.PackageReferences);
+    }
+
+    [Fact]
+    public void Application_references_only_the_domain_and_the_contracts_it_answers_with()
     {
         var application = ProjectFile.Load("CardBenefits.Application");
 
-        Assert.Equal(["CardBenefits.Domain"], application.ProjectReferences);
+        Assert.Equal(["CardBenefits.Contracts", "CardBenefits.Domain"], application.ProjectReferences);
+        Assert.Empty(application.PackageReferences);
     }
 
     [Fact]
@@ -41,6 +51,14 @@ public class LayerDependencyTests
             .Select(project => project.Name);
 
         Assert.Equal(["CardBenefits.Api"], referrers);
+    }
+
+    [Fact]
+    public void The_web_app_sees_the_contracts_and_nothing_else_of_the_tracker()
+    {
+        var web = ProjectFile.Load("CardBenefits.Web");
+
+        Assert.Equal(["CardBenefits.Contracts"], web.ProjectReferences);
     }
 
     private sealed record ProjectFile(string Name, string[] ProjectReferences, string[] PackageReferences)
