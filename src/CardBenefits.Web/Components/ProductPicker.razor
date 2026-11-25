@@ -1,0 +1,43 @@
+@* A catalog of a few hundred products: type to narrow, then pick. *@
+<div class="fields">
+    <div>
+        <label>Find a card product</label>
+        <input placeholder="e.g. sapphire" @bind="_filter" @bind:event="oninput" />
+    </div>
+    <div>
+        <label>Product</label>
+        <select value="@Value" @onchange="OnPicked">
+            <option value="">Choose…</option>
+            @foreach (var product in Matches)
+            {
+                <option value="@product.Id">@product.DisplayName @(product.IsBusiness ? "(business)" : "")</option>
+            }
+        </select>
+    </div>
+</div>
+
+@code {
+    private string _filter = "";
+
+    [Parameter, EditorRequired] public IReadOnlyList<ProductDto> Products { get; set; } = [];
+
+    [Parameter] public string? Value { get; set; }
+
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+
+    private IEnumerable<ProductDto> Matches
+    {
+        get
+        {
+            var words = _filter.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return Products.Where(product =>
+                product.Id == Value || words.All(word => product.DisplayName.Contains(word, StringComparison.OrdinalIgnoreCase)));
+        }
+    }
+
+    private Task OnPicked(ChangeEventArgs change)
+    {
+        var picked = change.Value as string;
+        return ValueChanged.InvokeAsync(string.IsNullOrEmpty(picked) ? null : picked);
+    }
+}

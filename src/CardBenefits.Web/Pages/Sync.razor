@@ -1,0 +1,154 @@
+@page "/sync"
+@inject TrackerClient Api
+
+<PageTitle>Sync health</PageTitle>
+<h1>Sync health</h1>
+
+<Loader Ready="@(_health is not null)" Error="@_error">
+    @if (!_health!.FeedConfigured)
+    {
+        <p class="note">The SimpleFIN access URL file is not set up, so nothing is pulled automatically. Cards can still be tracked by hand and from imported statements.</p>
+    }
+    else
+    {
+        <div class="card">
+            <div>Last sync: <strong>@Format.Time(_health.LastRunAt)</strong></div>
+            @if (_health.LastFailure is not null)
+            {
+                <p class="error">@_health.LastFailure</p>
+            }
+            <div class="actions">
+                <button class="primary" disabled="@(_busy || _health.NextManualSyncAt is not null)" @onclick="SyncNowAsync">@(_busy ? "Syncing…" : "Sync now")</button>
+                @if (_health.NextManualSyncAt is not null)
+                {
+                    <span class="muted">Available again at @Format.Time(_health.NextManualSyncAt). The Bridge allows only a few requests a day.</span>
+                }
+            </div>
+        </div>
+
+        <h2>Institutions</h2>
+        <div class="card">
+            @if (_health.Connections.Count == 0)
+            {
+                <p class="muted">No institution seen yet.</p>
+            }
+            <table>
+                <tbody>
+                    @foreach (var connection in _health.Connections)
+                    {
+                        <tr>
+                            <td>
+                                @connection.ConnectionName
+                                <div class="muted">@connection.Cards card(s) · last good sync @Format.Time(connection.LastOkAt)</div>
+                                @if (connection.LastError is not null)
+                                {
+                                    <div class="bad">@connection.LastError</div>
+                                }
+                            </td>
+                            <td class="num">
+                                <span class="chip @(connection.LastError is null ? "done" : "now")">@(connection.LastError is null ? "ok" : "needs attention")</span>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @if (_message is not null)
+    {
+        <p class="note">@_message</p>
+    }
+
+    <h2>Recent runs</h2>
+    <div class="card">
+        @if (_health.RecentRuns.Count == 0)
+        {
+            <p class="muted">Nothing has run yet.</p>
+        }
+        <table>
+            <tbody>
+                @foreach (var run in _health.RecentRuns)
+                {
+                    <tr>
+                        <td>
+                            @Format.Time(run.StartedAt) · @run.Feed
+                            <div class="muted">asked for @Format.Day(run.WindowStart) to @Format.Day(run.WindowEnd) · newest returned @Format.Day(run.NewestReturned) · newest stored @Format.Day(run.NewestStored)</div>
+                            @if (run.Failure is not null)
+                            {
+                                <div class="bad">@run.Failure</div>
+                            }
+                            @foreach (var error in run.Errors)
+                            {
+                                <div class="muted">@error</div>
+                            }
+                        </td>
+                        <td class="num">@run.Received received<div class="muted">@run.Changed changed</div></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <div class="actions">
+        <button disabled="@_busy" @onclick="ReplayAsync">Rebuild matching from stored transactions</button>
+    </div>
+</Loader>
+
+@code {
+    private SyncHealthDto? _health;
+    private string? _error;
+    private string? _message;
+    private bool _busy;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _health = await Api.GetAsync<SyncHealthDto>("api/sync");
+            _error = null;
+        }
+        catch (Exception failure) when (failure is ApiException or HttpRequestException)
+        {
+            _error = Format.Failure(failure);
+        }
+    }
+
+    private Task SyncNowAsync() => RunAsync(async () =>
+    {
+        var result = await Api.PostAsync<SyncNowResponse>("api/sync");
+        _message = result.Run switch
+        {
+            null => "A sync ran too recently. Try again later.",
+            { Failure: not null } => null,
+            var run => $"Done: {run.Received} transactions received, {run.Changed} new or changed.",
+        };
+    });
+
+    private Task ReplayAsync() => RunAsync(async () =>
+    {
+        await Api.PostAsync("api/replay");
+        _message = "Matching was rebuilt.";
+    });
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        _message = null;
+        try
+        {
+            await action();
+            await LoadAsync();
+        }
+        catch (Exception failure) when (failure is ApiException or HttpRequestException)
+        {
+            _error = Format.Failure(failure);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

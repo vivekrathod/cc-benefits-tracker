@@ -50,7 +50,7 @@ public class CardTests
 
         // Two people hold the same product, so the service offers both and a person picks.
         var waiting = Assert.Single(await tracker.Cards.GetNewAccountsAsync(Ct));
-        Assert.Equal([alexCard.Id, samCard.Id], waiting.SuggestedCardIds.Order());
+        Assert.Equal(new[] { alexCard.Id, samCard.Id }.Order(), waiting.SuggestedCardIds.Order());
 
         await tracker.Cards.MapAsync(waiting.Id, samCard.Id, Ct);
         var cards = await tracker.Queries.GetCardsAsync(Ct);

@@ -10,7 +10,7 @@ internal sealed class SmtpNotifier(SmtpOptions options) : INotifier
     public async Task SendAsync(Notification notification, CancellationToken cancellationToken)
     {
         using var message = new MailMessage { From = new MailAddress(options.From), Subject = notification.Subject, Body = notification.Body };
-        foreach (var recipient in options.To)
+        foreach (var recipient in options.Recipients)
         {
             message.To.Add(recipient);
         }

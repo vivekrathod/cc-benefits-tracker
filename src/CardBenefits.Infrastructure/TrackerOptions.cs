@@ -69,5 +69,8 @@ public sealed class SmtpOptions
 
     public string[] To { get; set; } = [];
 
-    public bool IsConfigured => !string.IsNullOrWhiteSpace(Host) && !string.IsNullOrWhiteSpace(From) && To.Length > 0;
+    /// <summary>The addresses to write to. Blank entries, as an unset environment variable leaves, are skipped.</summary>
+    public IReadOnlyList<string> Recipients => To.Where(address => !string.IsNullOrWhiteSpace(address)).ToArray();
+
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(Host) && !string.IsNullOrWhiteSpace(From) && Recipients.Count > 0;
 }

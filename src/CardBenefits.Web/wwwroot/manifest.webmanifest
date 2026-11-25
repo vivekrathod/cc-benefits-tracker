@@ -1,0 +1,14 @@
+{
+  "name": "Card benefits",
+  "short_name": "Benefits",
+  "id": "./",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f5f6f8",
+  "theme_color": "#14324f",
+  "prefer_related_applications": false,
+  "icons": [
+    { "src": "icon-512.png", "type": "image/png", "sizes": "512x512" },
+    { "src": "icon-192.png", "type": "image/png", "sizes": "192x192" }
+  ]
+}

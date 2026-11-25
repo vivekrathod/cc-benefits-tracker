@@ -1,0 +1,22 @@
+@* Shows "Loading" until the content is ready, and the reason when loading failed. *@
+@if (Error is not null)
+{
+    <p class="error">@Error</p>
+}
+
+@if (Ready)
+{
+    @ChildContent
+}
+else if (Error is null)
+{
+    <p class="loading">Loading…</p>
+}
+
+@code {
+    [Parameter] public bool Ready { get; set; }
+
+    [Parameter] public string? Error { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

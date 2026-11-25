@@ -1,0 +1,144 @@
+@inject TrackerClient Api
+
+<div class="card">
+    <div class="head">
+        <h3>@Account.Name</h3>
+        <span class="muted">@Account.ConnectionName</span>
+    </div>
+    <div class="muted">@(Account.TransactionCount == 1 ? "1 transaction" : $"{Account.TransactionCount} transactions") stored</div>
+
+    @if (_error is not null)
+    {
+        <p class="error">@_error</p>
+    }
+
+    @if (_mode == Mode.Closed)
+    {
+        <div class="actions">
+            <button class="primary" @onclick="() => _mode = Mode.NewCard">It is a card</button>
+            @if (Cards.Count > 0)
+            {
+                <button @onclick="() => _mode = Mode.Existing">It is a card I already have</button>
+            }
+            <button disabled="@_busy" @onclick="DismissAsync">Not a card</button>
+        </div>
+    }
+    else if (_mode == Mode.Existing)
+    {
+        <label>Which card?</label>
+        <select @bind="_cardId">
+            <option value="">Choose…</option>
+            @foreach (var card in Cards.OrderByDescending(card => Account.SuggestedCardIds.Contains(card.Id)))
+            {
+                <option value="@card.Id">@card.PersonName: @card.ProductName @card.LastFour @(Account.SuggestedCardIds.Contains(card.Id) ? "(likely)" : "")</option>
+            }
+        </select>
+        <div class="actions">
+            <button class="primary" disabled="@(_busy || string.IsNullOrEmpty(_cardId))" @onclick="MapAsync">Link</button>
+            <button class="quiet" @onclick="() => _mode = Mode.Closed">Cancel</button>
+        </div>
+    }
+    else
+    {
+        <div class="fields">
+            <div>
+                <label>Whose card?</label>
+                <select @bind="_personId">
+                    <option value="">Choose…</option>
+                    @foreach (var person in People)
+                    {
+                        <option value="@person.Id">@person.Name</option>
+                    }
+                </select>
+            </div>
+        </div>
+        <ProductPicker Products="Products" @bind-Value="_productId" />
+        <div class="fields">
+            <div>
+                <label>Anniversary month</label>
+                <select @bind="_month">
+                    @for (var month = 1; month <= 12; month++)
+                    {
+                        <option value="@month">@Format.Month(month)</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label>Day</label>
+                <input type="number" min="1" max="31" @bind="_day" />
+            </div>
+            <div>
+                <label>Opened on (optional)</label>
+                <input type="date" @bind="_openedOn" />
+            </div>
+        </div>
+        @if (Account.InferredAnniversaryMonth is not null)
+        {
+            <div class="muted">The annual fee last posted on @Format.Month(Account.InferredAnniversaryMonth.Value) @Account.InferredAnniversaryDay, so that is filled in. Change it if the cardmember year starts on another day.</div>
+        }
+        <div class="actions">
+            <button class="primary" disabled="@(_busy || string.IsNullOrEmpty(_personId) || _productId is null)" @onclick="ConfirmAsync">Add card</button>
+            <button class="quiet" @onclick="() => _mode = Mode.Closed">Cancel</button>
+        </div>
+    }
+</div>
+
+@code {
+    private enum Mode { Closed, NewCard, Existing }
+
+    private Mode _mode;
+    private bool _busy;
+    private string? _error;
+    private string _personId = "";
+    private string _cardId = "";
+    private string? _productId;
+    private int _month = 1;
+    private int _day = 1;
+    private DateOnly? _openedOn;
+
+    [Parameter, EditorRequired] public NewAccountDto Account { get; set; } = null!;
+
+    [Parameter, EditorRequired] public IReadOnlyList<PersonDto> People { get; set; } = [];
+
+    [Parameter, EditorRequired] public IReadOnlyList<CardDto> Cards { get; set; } = [];
+
+    [Parameter, EditorRequired] public IReadOnlyList<ProductDto> Products { get; set; } = [];
+
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    protected override void OnInitialized()
+    {
+        _productId = Account.SuggestedProductId;
+        _month = Account.InferredAnniversaryMonth ?? 1;
+        _day = Account.InferredAnniversaryDay ?? 1;
+        _cardId = Account.SuggestedCardIds.Count == 1 ? Account.SuggestedCardIds[0].ToString() : "";
+        _personId = People.Count == 1 ? People[0].Id.ToString() : "";
+    }
+
+    private Task ConfirmAsync() => RunAsync(() => Api.PostAsync(
+        $"api/accounts/{Account.Id}/confirm",
+        new ConfirmCardRequest(Guid.Parse(_personId), _productId!, _month, _day, _openedOn, null)));
+
+    private Task MapAsync() => RunAsync(() => Api.PostAsync($"api/accounts/{Account.Id}/map", new MapAccountRequest(Guid.Parse(_cardId))));
+
+    private Task DismissAsync() => RunAsync(() => Api.PostAsync("api/accounts/dismiss", new DismissAccountsRequest([Account.Id])));
+
+    private async Task RunAsync(Func<Task> change)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await change();
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception failure) when (failure is ApiException or HttpRequestException)
+        {
+            _error = Format.Failure(failure);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

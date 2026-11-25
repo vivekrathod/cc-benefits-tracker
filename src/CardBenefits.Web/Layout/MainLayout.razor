@@ -1,0 +1,51 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject TrackerClient Api
+
+<header class="top">Card benefits</header>
+
+<main>
+    @Body
+</main>
+
+<nav class="tabs">
+    <NavLink href="" Match="NavLinkMatch.All">Soon @Badge(_summary?.ExpiringSoon)</NavLink>
+    <NavLink href="cards">Cards</NavLink>
+    <NavLink href="value">Value</NavLink>
+    <NavLink href="review">Review @Badge(_summary?.ReviewItems + _summary?.NewAccounts)</NavLink>
+    <NavLink href="sync">Sync @Badge(_summary?.SyncProblems)</NavLink>
+    <NavLink href="manage">Manage</NavLink>
+</nav>
+
+@code {
+    private SummaryDto? _summary;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Api.Changed += Refresh;
+        await LoadAsync();
+    }
+
+    public void Dispose() => Api.Changed -= Refresh;
+
+    private void Refresh() => _ = InvokeAsync(LoadAsync);
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _summary = await Api.GetAsync<SummaryDto>("api/summary");
+        }
+        catch (Exception failure) when (failure is ApiException or HttpRequestException)
+        {
+            // The counts are a convenience. The page itself reports a server that cannot be reached.
+            _summary = null;
+        }
+
+        StateHasChanged();
+    }
+
+    private static RenderFragment? Badge(int? count) => count is > 0
+        ? @<span class="badge">@count</span>
+        : null;
+}

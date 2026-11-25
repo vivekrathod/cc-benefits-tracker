@@ -1,0 +1,56 @@
+@page "/value"
+@inject TrackerClient Api
+
+<PageTitle>Card value</PageTitle>
+<h1>Card value</h1>
+<p class="muted">Benefits used this cardmember year against the annual fee. A benefit counts in the cardmember year its period ends in.</p>
+
+<Loader Ready="@(_values is not null)" Error="@_error">
+    @if (_values!.Count == 0)
+    {
+        <p class="empty">No cards yet.</p>
+    }
+
+    @foreach (var person in _values.GroupBy(value => value.Card.PersonName))
+    {
+        <h2>@person.Key</h2>
+        <div class="card">
+            <table>
+                <thead>
+                    <tr><th>Card</th><th class="num">Used</th><th class="num">Fee</th><th class="num">Net</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var value in person)
+                    {
+                        <tr>
+                            <td>
+                                @value.Card.ProductName
+                                <div class="muted">@Format.Day(value.YearStart) to @Format.LongDay(value.YearEnd) · next fee @Format.LongDay(value.Card.NextFeeDate)</div>
+                            </td>
+                            <td class="num">@Format.Money(value.Used)<div class="muted">of @Format.Money(value.Available)</div></td>
+                            <td class="num">@Format.Money(value.AnnualFee)</td>
+                            <td class="num @(value.Net >= 0 ? "good" : "bad")">@Format.Money(value.Net)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</Loader>
+
+@code {
+    private IReadOnlyList<CardValueDto>? _values;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _values = await Api.GetAsync<IReadOnlyList<CardValueDto>>("api/card-value");
+        }
+        catch (Exception failure) when (failure is ApiException or HttpRequestException)
+        {
+            _error = Format.Failure(failure);
+        }
+    }
+}

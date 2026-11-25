@@ -1,0 +1,58 @@
+@page "/cards"
+@inject TrackerClient Api
+
+<PageTitle>This period</PageTitle>
+<h1>This period</h1>
+
+<Loader Ready="@(_groups is not null)" Error="@_error">
+    @if (_groups!.Count == 0)
+    {
+        <p class="empty">No cards yet. New accounts from the feed wait under Review, or add a card under Manage.</p>
+    }
+
+    @foreach (var person in _groups.GroupBy(group => group.Card.PersonName))
+    {
+        <h2>@person.Key</h2>
+        @foreach (var group in person)
+        {
+            <div class="card">
+                <div class="head">
+                    <h3>@group.Card.ProductName @(group.Card.LastFour is null ? "" : $"···{group.Card.LastFour}")</h3>
+                    <span class="muted">fee @Format.Money(group.Card.AnnualFee) on @Format.Day(group.Card.NextFeeDate)</span>
+                </div>
+                @if (group.Periods.Count == 0)
+                {
+                    <p class="muted">No recurring benefits to track on this card.</p>
+                }
+                @foreach (var period in group.Periods)
+                {
+                    <PeriodRow @key="period.Id" Period="period" ShowNotes="true" OnChanged="LoadAsync" />
+                }
+                @if (group.Card.LinkedAccounts.Count == 0)
+                {
+                    <p class="muted">Not linked to the feed, so nothing is detected for this card. Mark benefits by hand, or import a statement under Manage.</p>
+                }
+            </div>
+        }
+    }
+</Loader>
+
+@code {
+    private IReadOnlyList<CardPeriodsDto>? _groups;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _groups = await Api.GetAsync<IReadOnlyList<CardPeriodsDto>>("api/this-period");
+            _error = null;
+        }
+        catch (Exception failure) when (failure is ApiException or HttpRequestException)
+        {
+            _error = Format.Failure(failure);
+        }
+    }
+}

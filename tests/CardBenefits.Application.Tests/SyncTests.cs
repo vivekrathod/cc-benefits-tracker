@@ -154,6 +154,7 @@ public class SyncTests
         await using var tracker = await Tracker.StartAsync();
         await tracker.CardAsync(transactions: Posted("t1", "2026-11-10", 10, "AMEX DINING CREDIT"));
 
+        tracker.Clock.Advance(TimeSpan.FromDays(1));
         tracker.Feed.Outage = "The SimpleFIN Bridge answered 503.";
         var run = await tracker.SyncAsync();
 

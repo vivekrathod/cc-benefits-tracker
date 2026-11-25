@@ -1,0 +1,154 @@
+@inject TrackerClient Api
+
+<div class="card">
+    <div class="head">
+        <h3>@Card.ProductName @(Card.LastFour is null ? "" : $"···{Card.LastFour}")</h3>
+        <span class="muted">@Card.PersonName</span>
+    </div>
+    <div class="muted">
+        Opened @Format.LongDay(Card.OpenedOn) · cardmember year starts @Format.Month(Card.AnniversaryMonth) @Card.AnniversaryDay · fee @Format.Money(Card.AnnualFee)
+        @if (Card.ClosedOn is not null)
+        {
+            <span> · closed @Format.LongDay(Card.ClosedOn.Value)</span>
+        }
+    </div>
+    <div class="muted">
+        @(Card.LinkedAccounts.Count == 0 ? "Not linked to the feed" : "Linked: " + string.Join("; ", Card.LinkedAccounts))
+    </div>
+
+    @if (_error is not null)
+    {
+        <p class="error">@_error</p>
+    }
+    @if (_message is not null)
+    {
+        <p class="note">@_message</p>
+    }
+
+    @if (!_open)
+    {
+        <div class="actions"><button class="quiet" @onclick="() => _open = true">Edit, import a statement, change product…</button></div>
+    }
+    else
+    {
+        <h2>Anniversary and fee</h2>
+        <div class="fields">
+            <div>
+                <label>Month</label>
+                <select @bind="_month">
+                    @for (var month = 1; month <= 12; month++)
+                    {
+                        <option value="@month">@Format.Month(month)</option>
+                    }
+                </select>
+            </div>
+            <div><label>Day</label><input type="number" min="1" max="31" @bind="_day" /></div>
+            <div><label>Annual fee ($)</label><input type="number" min="0" step="1" @bind="_fee" /></div>
+            <div><button disabled="@_busy" @onclick="SaveAsync">Save</button></div>
+        </div>
+
+        <h2>Import a statement (CSV export from the issuer)</h2>
+        <InputFile OnChange="UploadAsync" accept=".csv,text/csv" disabled="@_busy" />
+        <div class="muted">Fills in history the feed does not reach. Importing the same file twice is harmless.</div>
+
+        @if (Card.ClosedOn is null)
+        {
+            <h2>Product change on the same account</h2>
+            <ProductPicker Products="Products" @bind-Value="_newProductId" />
+            <div class="fields">
+                <div><label>Changed on</label><input type="date" @bind="_changedOn" /></div>
+                <div><button disabled="@(_busy || _newProductId is null || _changedOn is null)" @onclick="ChangeProductAsync">Change product</button></div>
+            </div>
+
+            <h2>Close or remove</h2>
+            <div class="fields">
+                <div><label>Closed on</label><input type="date" @bind="_closedOn" /></div>
+                <div><button disabled="@(_busy || _closedOn is null)" @onclick="CloseAsync">Close card</button></div>
+            </div>
+        }
+
+        <div class="actions">
+            @if (!_confirmRemove)
+            {
+                <button class="danger" @onclick="() => _confirmRemove = true">Remove this card…</button>
+            }
+            else
+            {
+                <span>Remove the card and its tracked periods? Linked accounts go back to Review.</span>
+                <button class="danger" disabled="@_busy" @onclick="RemoveAsync">Yes, remove</button>
+                <button class="quiet" @onclick="() => _confirmRemove = false">Keep</button>
+            }
+            <button class="quiet" @onclick="() => _open = false">Done</button>
+        </div>
+    }
+</div>
+
+@code {
+    private const long LargestStatementBytes = 5 * 1024 * 1024;
+
+    private bool _open;
+    private bool _busy;
+    private bool _confirmRemove;
+    private string? _error;
+    private string? _message;
+    private int _month;
+    private int _day;
+    private decimal? _fee;
+    private string? _newProductId;
+    private DateOnly? _changedOn;
+    private DateOnly? _closedOn;
+
+    [Parameter, EditorRequired] public CardDto Card { get; set; } = null!;
+
+    [Parameter, EditorRequired] public IReadOnlyList<ProductDto> Products { get; set; } = [];
+
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        _month = Card.AnniversaryMonth;
+        _day = Card.AnniversaryDay;
+        _fee = Card.AnnualFee;
+    }
+
+    private Task SaveAsync() => RunAsync(
+        () => Api.PutAsync($"api/cards/{Card.Id}", new UpdateCardRequest(_month, _day, _fee)), "Saved.");
+
+    private Task ChangeProductAsync() => RunAsync(
+        () => Api.PostAsync($"api/cards/{Card.Id}/product", new ChangeProductRequest(_newProductId!, _changedOn!.Value)), "Product changed.");
+
+    private Task CloseAsync() => RunAsync(
+        () => Api.PostAsync($"api/cards/{Card.Id}/close", new CloseCardRequest(_closedOn!.Value)), "Card closed.");
+
+    private Task RemoveAsync() => RunAsync(() => Api.DeleteAsync($"api/cards/{Card.Id}"), null);
+
+    private Task UploadAsync(InputFileChangeEventArgs upload) => RunAsync(
+        async () =>
+        {
+            using var reader = new StreamReader(upload.File.OpenReadStream(LargestStatementBytes));
+            var result = await Api.UploadStatementAsync(Card.Id, await reader.ReadToEndAsync());
+            _message = $"Read {result.Received} rows; {result.Changed} were new or changed.";
+        },
+        null);
+
+    private async Task RunAsync(Func<Task> change, string? done)
+    {
+        _busy = true;
+        _error = null;
+        _message = null;
+        try
+        {
+            await change();
+            _message ??= done;
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception failure) when (failure is ApiException or HttpRequestException or IOException)
+        {
+            _error = failure is IOException ? "The file is larger than 5 MB." : Format.Failure(failure);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

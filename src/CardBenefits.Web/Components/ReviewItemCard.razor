@@ -1,0 +1,97 @@
+@inject TrackerClient Api
+
+<div class="card">
+    <div class="head">
+        <h3>@Format.Money(Item.TransactionAmount) · @Item.Description</h3>
+        <span class="muted">@Format.Day(Item.PostedOn)</span>
+    </div>
+    <div class="muted">@Item.CardName · @Item.PersonName</div>
+    <p>@Explanation</p>
+
+    @if (_error is not null)
+    {
+        <p class="error">@_error</p>
+    }
+
+    @if (Item.Reason is "Unmatched" or "Suggested")
+    {
+        <div class="fields">
+            <div>
+                <label>Benefit</label>
+                <select @bind="_benefitId">
+                    <option value="">Choose…</option>
+                    @foreach (var benefit in Item.Benefits)
+                    {
+                        <option value="@benefit.Id">@benefit.Name</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label>Words that identify it (optional)</label>
+                <input @bind="_keyword" placeholder="leave empty to decide only this one" />
+            </div>
+        </div>
+        <div class="muted">With words filled in, credits whose description contains them are handled the same way from now on.</div>
+        <div class="actions">
+            <button class="primary" disabled="@(_busy || string.IsNullOrEmpty(_benefitId))" @onclick="AssignAsync">Count for this benefit</button>
+            <button disabled="@_busy" @onclick="DismissAsync">Not a benefit</button>
+        </div>
+    }
+    else
+    {
+        <div class="actions">
+            <button class="primary" disabled="@_busy" @onclick="AcknowledgeAsync">OK, noted</button>
+            <button disabled="@_busy" @onclick="DismissAsync">Not a benefit after all</button>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _busy;
+    private string? _error;
+    private string _benefitId = "";
+    private string _keyword = "";
+
+    [Parameter, EditorRequired] public ReviewItemDto Item { get; set; } = null!;
+
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private string Explanation => Item.Reason switch
+    {
+        "Unmatched" => "A credit that matched no benefit. Refunds end up here too.",
+        "Suggested" => $"This looks like {Item.BenefitName}, but the rule behind it has not been checked against a real statement. Confirm it or say it is not a benefit.",
+        "Excess" => $"{Format.Money(Item.Amount)} of this credit is more than {Item.BenefitName} had left in its period, so that part was not counted.",
+        "NoPeriod" => $"This matched {Item.BenefitName}, but the card has no period for it on that date.",
+        "Reversal" => $"A charge of {Format.Money(Item.Amount)} that reads like {Item.BenefitName} being taken back. Nothing was changed; check the statement.",
+        _ => Item.Reason,
+    };
+
+    protected override void OnInitialized() => _benefitId = Item.BenefitId ?? "";
+
+    private Task AssignAsync() => RunAsync(() => Api.PostAsync(
+        $"api/review/{Item.Id}/assign", new AssignReviewRequest(_benefitId, string.IsNullOrWhiteSpace(_keyword) ? null : _keyword)));
+
+    private Task DismissAsync() => RunAsync(() => Api.PostAsync(
+        $"api/review/{Item.Id}/dismiss", new DismissReviewRequest(string.IsNullOrWhiteSpace(_keyword) ? null : _keyword)));
+
+    private Task AcknowledgeAsync() => RunAsync(() => Api.PostAsync($"api/review/{Item.Id}/acknowledge"));
+
+    private async Task RunAsync(Func<Task> change)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await change();
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception failure) when (failure is ApiException or HttpRequestException)
+        {
+            _error = Format.Failure(failure);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

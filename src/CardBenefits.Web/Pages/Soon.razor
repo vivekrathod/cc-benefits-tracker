@@ -1,0 +1,56 @@
+@page "/"
+@inject TrackerClient Api
+
+<PageTitle>Expiring soon</PageTitle>
+<h1>Expiring soon</h1>
+
+<div class="segmented" role="group" aria-label="How far ahead to look">
+    @foreach (var choice in new[] { 7, 14, 30, 60 })
+    {
+        <button class="@(choice == _days ? "on" : "")" @onclick="() => ShowAsync(choice)">@choice days</button>
+    }
+</div>
+
+<Loader Ready="@(_periods is not null)" Error="@_error">
+    @if (_periods!.Count == 0)
+    {
+        <p class="empty">Nothing with value left ends in the next @_days days.</p>
+    }
+    else
+    {
+        <p class="muted">@Format.Money(_periods.Sum(period => period.Remaining)) still to use across @_periods.Count benefits.</p>
+        <div class="card">
+            @foreach (var period in _periods)
+            {
+                <PeriodRow @key="period.Id" Period="period" ShowCard="true" OnChanged="LoadAsync" />
+            }
+        </div>
+    }
+</Loader>
+
+@code {
+    private IReadOnlyList<PeriodDto>? _periods;
+    private string? _error;
+    private int _days = 14;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private Task ShowAsync(int days)
+    {
+        _days = days;
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _periods = await Api.GetAsync<IReadOnlyList<PeriodDto>>($"api/expiring?days={_days}");
+            _error = null;
+        }
+        catch (Exception failure) when (failure is ApiException or HttpRequestException)
+        {
+            _error = Format.Failure(failure);
+        }
+    }
+}

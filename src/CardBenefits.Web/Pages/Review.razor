@@ -1,0 +1,90 @@
+@page "/review"
+@inject TrackerClient Api
+
+<PageTitle>Review</PageTitle>
+<h1>Review</h1>
+
+<Loader Ready="@(_items is not null)" Error="@_error">
+    @if (_accounts!.Count == 0 && _items!.Count == 0)
+    {
+        <p class="empty">Nothing to review.</p>
+    }
+
+    @if (_accounts.Count > 0)
+    {
+        <h2>New accounts (@_accounts.Count)</h2>
+        <p class="muted">Accounts the feed reported that are not cards yet. Until you decide, their transactions are kept so a card can be matched straight away; "Not a card" removes them and hides the account.</p>
+        @if (NotCards.Count > 0)
+        {
+            <div class="actions" style="margin:0 0 12px">
+                <button disabled="@_busy" @onclick="DismissNotCardsAsync">Dismiss the @NotCards.Count that do not look like cards</button>
+            </div>
+        }
+        @if (_people!.Count == 0)
+        {
+            <p class="note">Add the people in the household under Manage first, then come back to assign cards.</p>
+        }
+        @foreach (var account in _accounts)
+        {
+            <NewAccountCard @key="account.Id" Account="account" People="_people" Cards="_cards!" Products="_products!" OnChanged="LoadAsync" />
+        }
+    }
+
+    @if (_items!.Count > 0)
+    {
+        <h2>Credits (@_items.Count)</h2>
+        @foreach (var item in _items)
+        {
+            <ReviewItemCard @key="item.Id" Item="item" OnChanged="LoadAsync" />
+        }
+    }
+</Loader>
+
+@code {
+    private IReadOnlyList<ReviewItemDto>? _items;
+    private IReadOnlyList<NewAccountDto>? _accounts;
+    private IReadOnlyList<PersonDto>? _people;
+    private IReadOnlyList<CardDto>? _cards;
+    private IReadOnlyList<ProductDto>? _products;
+    private string? _error;
+    private bool _busy;
+
+    private IReadOnlyList<NewAccountDto> NotCards => _accounts!.Where(account => !account.LooksLikeCard).ToArray();
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _products ??= await Api.GetAsync<IReadOnlyList<ProductDto>>("api/catalog/products");
+            _people = await Api.GetAsync<IReadOnlyList<PersonDto>>("api/people");
+            _cards = (await Api.GetAsync<IReadOnlyList<CardDto>>("api/cards")).Where(card => card.ClosedOn is null).ToArray();
+            _accounts = await Api.GetAsync<IReadOnlyList<NewAccountDto>>("api/accounts/new");
+            _items = await Api.GetAsync<IReadOnlyList<ReviewItemDto>>("api/review");
+            _error = null;
+        }
+        catch (Exception failure) when (failure is ApiException or HttpRequestException)
+        {
+            _error = Format.Failure(failure);
+        }
+    }
+
+    private async Task DismissNotCardsAsync()
+    {
+        _busy = true;
+        try
+        {
+            await Api.PostAsync("api/accounts/dismiss", new DismissAccountsRequest(NotCards.Select(account => account.Id).ToArray()));
+            await LoadAsync();
+        }
+        catch (Exception failure) when (failure is ApiException or HttpRequestException)
+        {
+            _error = Format.Failure(failure);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

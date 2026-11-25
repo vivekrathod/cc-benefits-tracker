@@ -1,0 +1,134 @@
+@page "/manage"
+@inject TrackerClient Api
+
+<PageTitle>Manage</PageTitle>
+<h1>Manage</h1>
+
+<Loader Ready="@(_cards is not null)" Error="@_error">
+    <h2>People</h2>
+    <div class="card">
+        @if (_people!.Count > 0)
+        {
+            <div>@string.Join(", ", _people.Select(person => person.Name))</div>
+        }
+        <div class="fields">
+            <div><label>Add a person</label><input @bind="_newPerson" placeholder="Name" /></div>
+            <div><button disabled="@(_busy || string.IsNullOrWhiteSpace(_newPerson))" @onclick="AddPersonAsync">Add</button></div>
+        </div>
+    </div>
+
+    <h2>Cards (@_cards!.Count)</h2>
+    @foreach (var card in _cards)
+    {
+        <CardEditor @key="card.Id" Card="card" Products="_products!" OnChanged="LoadAsync" />
+    }
+
+    <h2>Add a card that is not in the feed</h2>
+    <div class="card">
+        <p class="muted">For an issuer the Bridge is not connected to. Cards in the feed show up under Review by themselves.</p>
+        <div class="fields">
+            <div>
+                <label>Whose card?</label>
+                <select @bind="_personId">
+                    <option value="">Choose…</option>
+                    @foreach (var person in _people)
+                    {
+                        <option value="@person.Id">@person.Name</option>
+                    }
+                </select>
+            </div>
+            <div><label>Opened on</label><input type="date" @bind="_openedOn" /></div>
+            <div><label>Last four (optional)</label><input @bind="_lastFour" maxlength="4" size="6" inputmode="numeric" /></div>
+        </div>
+        <ProductPicker Products="_products!" @bind-Value="_productId" />
+        <div class="muted">The cardmember year starts on the day the card was opened. It can be changed afterwards.</div>
+        <div class="actions">
+            <button class="primary" disabled="@(_busy || string.IsNullOrEmpty(_personId) || _productId is null || _openedOn is null)" @onclick="AddCardAsync">Add card</button>
+        </div>
+    </div>
+
+    @if (_hidden!.Count > 0)
+    {
+        <h2>Hidden accounts (@_hidden.Count)</h2>
+        <div class="card">
+            <p class="muted">Accounts marked "Not a card". Nothing is stored for them.</p>
+            <table>
+                <tbody>
+                    @foreach (var account in _hidden)
+                    {
+                        <tr>
+                            <td>@account.Name<div class="muted">@account.ConnectionName</div></td>
+                            <td class="num"><button class="quiet" disabled="@_busy" @onclick="() => ReopenAsync(account.Id)">Put back in Review</button></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</Loader>
+
+@code {
+    private IReadOnlyList<PersonDto>? _people;
+    private IReadOnlyList<CardDto>? _cards;
+    private IReadOnlyList<ProductDto>? _products;
+    private IReadOnlyList<FeedAccountDto>? _hidden;
+    private string? _error;
+    private bool _busy;
+    private string _newPerson = "";
+    private string _personId = "";
+    private string? _productId;
+    private DateOnly? _openedOn;
+    private string _lastFour = "";
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _products ??= await Api.GetAsync<IReadOnlyList<ProductDto>>("api/catalog/products");
+            _people = await Api.GetAsync<IReadOnlyList<PersonDto>>("api/people");
+            _hidden = (await Api.GetAsync<IReadOnlyList<FeedAccountDto>>("api/accounts")).Where(account => account.Status == "Dismissed").ToArray();
+            _cards = await Api.GetAsync<IReadOnlyList<CardDto>>("api/cards");
+            _error = null;
+        }
+        catch (Exception failure) when (failure is ApiException or HttpRequestException)
+        {
+            _error = Format.Failure(failure);
+        }
+    }
+
+    private Task AddPersonAsync() => RunAsync(async () =>
+    {
+        await Api.PostAsync("api/people", new AddPersonRequest(_newPerson));
+        _newPerson = "";
+    });
+
+    private Task AddCardAsync() => RunAsync(async () =>
+    {
+        await Api.PostAsync("api/cards", new AddCardRequest(
+            Guid.Parse(_personId), _productId!, _openedOn!.Value, null, null, string.IsNullOrWhiteSpace(_lastFour) ? null : _lastFour.Trim(), null));
+        _productId = null;
+        _lastFour = "";
+    });
+
+    private Task ReopenAsync(Guid accountId) => RunAsync(() => Api.PostAsync($"api/accounts/{accountId}/reopen"));
+
+    private async Task RunAsync(Func<Task> change)
+    {
+        _busy = true;
+        try
+        {
+            await change();
+            await LoadAsync();
+        }
+        catch (Exception failure) when (failure is ApiException or HttpRequestException)
+        {
+            _error = Format.Failure(failure);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
