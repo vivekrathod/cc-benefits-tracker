@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using CardBenefits.Application.Feeds;
 using CardBenefits.Application.Ports;
 using CardBenefits.Domain;
 using CardBenefits.Infrastructure.Feeds.SimpleFin;
@@ -228,4 +229,44 @@ public class SimpleFinTests
             return Task.FromResult(respond(request));
         }
     }
+
+    [Theory]
+    // The Bridge has been seen naming a connection "MX-MBR-9" on accounts and "MBR-9" on its error.
+    [InlineData("MX-MBR-9", "MBR-9")]
+    [InlineData("MBR-9", "MX-MBR-9")]
+    public void An_error_is_joined_to_its_institution_when_the_id_differs_only_by_a_prefix(string connectionId, string errorId)
+    {
+        var snapshot = Parse($$"""
+            {
+              "errlist": [ { "code": "con.auth", "msg": "Needs to be re-authenticated.", "conn_id": "{{errorId}}" } ],
+              "connections": [
+                { "conn_id": "{{connectionId}}", "name": "Example Bank" },
+                { "conn_id": "MX-MBR-19", "name": "Other Bank" }
+              ],
+              "accounts": []
+            }
+            """);
+
+        Assert.Equal("Example Bank", Assert.Single(snapshot.Errors).ConnectionName);
+    }
+
+    [Fact]
+    public void An_error_that_could_belong_to_two_institutions_keeps_its_own_id()
+    {
+        var snapshot = Parse("""
+            {
+              "errlist": [ { "code": "con.auth", "msg": "Needs to be re-authenticated.", "conn_id": "MBR-9" } ],
+              "connections": [
+                { "conn_id": "MX-MBR-9", "name": "Example Bank" },
+                { "conn_id": "FI-MBR-9", "name": "Other Bank" }
+              ],
+              "accounts": []
+            }
+            """);
+
+        Assert.Equal("MBR-9", Assert.Single(snapshot.Errors).ConnectionName);
+    }
+
+    private static FeedSnapshot Parse(string json) =>
+        SimpleFinParser.Parse(new MemoryStream(Encoding.UTF8.GetBytes(json)), Clock.ToLocalDate);
 }

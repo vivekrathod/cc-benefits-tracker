@@ -122,9 +122,14 @@ public class StoreTests : IAsyncLifetime
 
         if (!OperatingSystem.IsWindows())
         {
+            // Older backups and SQLite's side files hold the same data as the database itself.
             var ownerOnly = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-            Assert.Equal(ownerOnly, File.GetUnixFileMode(newest));
-            Assert.Equal(ownerOnly, File.GetUnixFileMode(Path.Combine(_folder.Path, "tracker.db")));
+            var files = Directory.GetFiles(backups).Concat(Directory.GetFiles(_folder.Path, "tracker.db*")).ToArray();
+            Assert.Contains(Path.Combine(_folder.Path, "tracker.db"), files);
+            foreach (var file in files)
+            {
+                Assert.Equal(ownerOnly, File.GetUnixFileMode(file));
+            }
         }
     }
 }

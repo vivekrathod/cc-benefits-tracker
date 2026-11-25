@@ -9,19 +9,24 @@ public sealed class DatabaseBackup(ITrackerStore store, IClock clock, TrackerOpt
     {
         var folder = Path.Combine(options.DataDirectory, "backups");
         var todays = Path.Combine(folder, $"tracker-{clock.Today:yyyyMMdd}.db");
-        if (File.Exists(todays))
+        var due = !File.Exists(todays);
+        if (due)
         {
-            return false;
+            await store.BackupAsync(todays, cancellationToken);
         }
 
-        await store.BackupAsync(todays, cancellationToken);
-        TrackerServices.OwnerOnly(todays);
-
-        foreach (var old in Directory.EnumerateFiles(folder, "tracker-*.db").OrderDescending().Skip(Math.Max(1, options.BackupsToKeep)))
+        var backups = Directory.Exists(folder) ? Directory.GetFiles(folder, "tracker-*.db") : [];
+        foreach (var old in backups.OrderDescending().Skip(Math.Max(1, options.BackupsToKeep)))
         {
             File.Delete(old);
         }
 
-        return true;
+        // Every pass, so copies made by an earlier version are protected too.
+        foreach (var kept in backups.Where(File.Exists))
+        {
+            TrackerServices.OwnerOnly(kept);
+        }
+
+        return due;
     }
 }

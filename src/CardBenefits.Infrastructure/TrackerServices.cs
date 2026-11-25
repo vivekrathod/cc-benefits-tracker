@@ -90,7 +90,11 @@ public static class TrackerServices
             await db.Database.MigrateAsync(cancellationToken);
         }
 
+        // SQLite's side files carry the same rows as the database. Ones it creates
+        // later take the database's mode, so these only need setting once.
         OwnerOnly(options.DatabasePath);
+        OwnerOnly(options.DatabasePath + "-wal");
+        OwnerOnly(options.DatabasePath + "-shm");
     }
 
     /// <summary>The database holds household transactions, so only its owner may read it.</summary>

@@ -38,7 +38,7 @@ internal static class SimpleFinParser
             .Select(error => new FeedError(
                 Text(error, "code") ?? "error",
                 Text(error, "msg") ?? "",
-                Text(error, "conn_id") is { } id ? connections.GetValueOrDefault(id, id) : null))
+                Text(error, "conn_id") is { } id ? ConnectionName(id, connections) : null))
             // Protocol v1 reported errors as plain strings.
             .Concat(Array(root, "errors")
                 .Where(error => error.ValueKind == JsonValueKind.String)
@@ -69,13 +69,34 @@ internal static class SimpleFinParser
     {
         if (Text(account, "conn_id") is { } id)
         {
-            return connections.GetValueOrDefault(id, id);
+            return ConnectionName(id, connections);
         }
 
         // Protocol v1 put the institution on the account itself.
         return account.TryGetProperty("org", out var org) && org.ValueKind == JsonValueKind.Object
             ? Text(org, "name") ?? Text(org, "domain") ?? ""
             : "";
+    }
+
+    /// <summary>
+    /// The Bridge has been seen giving the same connection with and without a leading
+    /// prefix ("MX-MBR-9" on accounts, "MBR-9" on its error), so an id with no exact
+    /// match is joined to the one connection that differs only by such a prefix.
+    /// </summary>
+    private static string ConnectionName(string id, Dictionary<string, string> connections)
+    {
+        if (connections.TryGetValue(id, out var name))
+        {
+            return name;
+        }
+
+        var close = connections
+            .Where(connection => connection.Key.EndsWith("-" + id, StringComparison.Ordinal)
+                || id.EndsWith("-" + connection.Key, StringComparison.Ordinal))
+            .Select(connection => connection.Value)
+            .Distinct()
+            .ToArray();
+        return close.Length == 1 ? close[0] : id;
     }
 
     private static Money Amount(JsonElement transaction)
