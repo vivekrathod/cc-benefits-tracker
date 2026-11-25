@@ -39,9 +39,19 @@ public static class Matcher
 
         foreach (var transaction in posted)
         {
-            var benefitId = BenefitFor(transaction, book, orderedRules, ignored, options, out var skip);
+            var benefitId = BenefitFor(transaction, book, orderedRules, ignored, options, out var skip, out var confirmed);
             if (skip)
             {
+                continue;
+            }
+
+            if (benefitId is not null && !confirmed)
+            {
+                if (transaction.Amount > Money.Zero)
+                {
+                    review.Add(new ReviewFlag(transaction.Id, ReviewReason.Suggested, transaction.Amount, benefitId));
+                }
+
                 continue;
             }
 
@@ -90,9 +100,11 @@ public static class Matcher
         MatchRule[] orderedRules,
         string[] ignored,
         MatchOptions options,
-        out bool skip)
+        out bool skip,
+        out bool confirmed)
     {
         skip = false;
+        confirmed = true;
         if (options.Pins.TryGetValue(transaction.Id, out var pinned))
         {
             skip = pinned is null;
@@ -118,6 +130,7 @@ public static class Matcher
             && (candidate.AmountCeiling is null || amount <= candidate.AmountCeiling)
             && book.Any(period => period.CardId == transaction.CardId && period.BenefitId == candidate.BenefitId));
 
+        confirmed = rule is null || rule.Verified;
         return rule?.BenefitId;
     }
 

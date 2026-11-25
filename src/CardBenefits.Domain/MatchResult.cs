@@ -16,6 +16,9 @@ public enum ReviewReason
 
     /// <summary>A debit whose description matches a benefit, such as a clawed-back credit.</summary>
     Reversal,
+
+    /// <summary>A credit that matched only an unverified rule and waits for a person to confirm it.</summary>
+    Suggested,
 }
 
 /// <summary>Something the matcher could not settle and a person should look at.</summary>

@@ -254,6 +254,47 @@ public class MatcherTests
         }
     }
 
+    public class UnverifiedRules
+    {
+        private static readonly MatchRule[] Unverified = [new("chase-sapphire-preferred/hotel-credit", "hotel", Verified: false)];
+
+        [Fact]
+        public void A_credit_matching_only_an_unverified_rule_is_suggested_for_review_and_not_counted()
+        {
+            var period = Period("chase-sapphire-preferred/hotel-credit", "2026-01-01", "2026-12-31", 100);
+            var credit = Credit("2026-03-01", 50, "HOTEL CREDIT");
+
+            var result = Matcher.Match([credit], [period], Unverified, new MatchOptions());
+
+            Assert.Empty(result.Allocations);
+            Assert.Equal(
+                [new ReviewFlag(credit.Id, ReviewReason.Suggested, Money.FromDollars(50), "chase-sapphire-preferred/hotel-credit")],
+                result.Review);
+        }
+
+        [Fact]
+        public void Once_a_person_confirms_it_the_credit_is_counted()
+        {
+            var period = Period("chase-sapphire-preferred/hotel-credit", "2026-01-01", "2026-12-31", 100);
+            var credit = Credit("2026-03-01", 50, "HOTEL CREDIT");
+            var options = new MatchOptions { Pins = { [credit.Id] = "chase-sapphire-preferred/hotel-credit" } };
+
+            var result = Matcher.Match([credit], [period], Unverified, options);
+
+            Assert.Equal(Money.FromDollars(50), Assert.Single(result.Allocations).Amount);
+        }
+
+        [Fact]
+        public void A_debit_matching_only_an_unverified_rule_is_left_alone()
+        {
+            var period = Period("chase-sapphire-preferred/hotel-credit", "2026-01-01", "2026-12-31", 100);
+
+            var result = Matcher.Match([Credit("2026-03-01", -180, "GRAND HOTEL")], [period], Unverified, new MatchOptions());
+
+            Assert.Empty(result.Review);
+        }
+    }
+
     public class Decisions
     {
         [Fact]

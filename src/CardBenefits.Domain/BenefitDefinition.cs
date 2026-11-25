@@ -26,9 +26,14 @@ public sealed class BenefitDefinition
             throw new ArgumentException("Two sets of terms start on the same day.", nameof(terms));
         }
 
-        if (ordered.Any(version => version.Amount <= Money.Zero))
+        if (ordered.Any(version => version.Amount < Money.Zero))
         {
-            throw new ArgumentException("A benefit amount must be positive.", nameof(terms));
+            throw new ArgumentException("A benefit amount cannot be negative.", nameof(terms));
+        }
+
+        if (detection == DetectionMode.Automatic && ordered.Any(version => version.Amount == Money.Zero))
+        {
+            throw new ArgumentException("A benefit detected from statement credits needs a positive amount.", nameof(terms));
         }
 
         if (lastDay < ordered[0].EffectiveFrom)

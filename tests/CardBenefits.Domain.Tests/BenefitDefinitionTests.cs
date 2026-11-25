@@ -40,9 +40,22 @@ public class BenefitDefinitionTests
     }
 
     [Fact]
-    public void An_amount_must_be_positive()
+    public void An_automatically_detected_benefit_needs_a_positive_amount()
     {
         Assert.Throws<ArgumentException>(() => Define([Terms("2024-01-01", 0)]));
+    }
+
+    [Fact]
+    public void A_manual_perk_may_have_no_dollar_value()
+    {
+        var perk = new BenefitDefinition(
+            "boa-atmos-rewards-summit/alaska-lounge-passes",
+            "boa-atmos-rewards-summit",
+            "Alaska Lounge passes",
+            DetectionMode.Manual,
+            [Terms("2024-01-01", 0)]);
+
+        Assert.Equal(Money.Zero, perk.Terms[0].Amount);
     }
 
     [Fact]
