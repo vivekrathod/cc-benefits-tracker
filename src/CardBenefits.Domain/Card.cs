@@ -12,9 +12,9 @@ public sealed class Card
         Guid id, Guid personId, string productId, DateOnly openedOn, Anniversary anniversary, string? lastFour = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(productId);
-        if (lastFour is not null && (lastFour.Length != 4 || !lastFour.All(char.IsAsciiDigit)))
+        if (lastFour is not null)
         {
-            throw new ArgumentException("Last four must be exactly four digits.", nameof(lastFour));
+            RequireFourDigits(lastFour);
         }
 
         Id = id;
@@ -29,7 +29,7 @@ public sealed class Card
 
     public Guid PersonId { get; }
 
-    public string? LastFour { get; }
+    public string? LastFour { get; private set; }
 
     public DateOnly OpenedOn { get; }
 
@@ -46,6 +46,21 @@ public sealed class Card
     public string CurrentProductId => _products[^1].ProductId;
 
     public bool IsClosed => ClosedOn is not null;
+
+    /// <summary>The digits the feed shows for this card, learned when an account is linked to it.</summary>
+    public void RecordLastFour(string lastFour)
+    {
+        RequireFourDigits(lastFour);
+        LastFour = lastFour;
+    }
+
+    private static void RequireFourDigits(string lastFour)
+    {
+        if (lastFour.Length != 4 || !lastFour.All(char.IsAsciiDigit))
+        {
+            throw new ArgumentException("Last four must be exactly four digits.", nameof(lastFour));
+        }
+    }
 
     /// <summary>Rebuilds a stored card with its product history.</summary>
     public static Card Restore(

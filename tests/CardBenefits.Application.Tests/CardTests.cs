@@ -65,6 +65,51 @@ public class CardTests
     }
 
     [Fact]
+    public async Task A_new_account_that_fits_exactly_one_card_is_linked_by_the_sync()
+    {
+        await using var tracker = await Tracker.StartAsync();
+        var alex = await tracker.PersonAsync("Alex");
+        var gold = await tracker.Cards.AddCardAsync(
+            new AddCardRequest(alex.Id, TestCatalog.Gold, DateOnly.Parse("2024-05-06"), null, null, null, null), Ct);
+
+        tracker.Feed.Account("a1", "American Express Gold Card (1234)", "American Express",
+            Posted("t1", "2026-11-10", 10, "AMEX DINING CREDIT"));
+        tracker.Feed.Account("a2", "TOTAL CHECKING (9999)", "Chase");
+        await tracker.SyncAsync();
+
+        // Nobody had to confirm it: one card of that product, and no other account after it.
+        var waiting = Assert.Single(await tracker.Cards.GetNewAccountsAsync(Ct));
+        Assert.Equal("TOTAL CHECKING (9999)", waiting.Name);
+        var card = Assert.Single(await tracker.Queries.GetCardsAsync(Ct));
+        Assert.Equal(["American Express: American Express Gold Card (1234)"], card.LinkedAccounts);
+        Assert.Equal("1234", card.LastFour);
+        Assert.Equal(Money.FromDollars(10), (await tracker.PeriodAsync(TestCatalog.Dining, "2026-11-10")).Used);
+        Assert.Equal(gold.Id, card.Id);
+    }
+
+    [Fact]
+    public async Task Two_accounts_after_the_same_card_wait_for_a_person()
+    {
+        await using var tracker = await Tracker.StartAsync();
+        var alex = await tracker.PersonAsync("Alex");
+        var gold = await tracker.Cards.AddCardAsync(
+            new AddCardRequest(alex.Id, TestCatalog.Gold, DateOnly.Parse("2024-05-06"), null, null, null, null), Ct);
+
+        tracker.Feed.Account("a1", "Gold Card (1111)", "Amex");
+        tracker.Feed.Account("a2", "Gold Card (2222)", "Amex");
+        await tracker.SyncAsync();
+
+        var waiting = await tracker.Cards.GetNewAccountsAsync(Ct);
+        Assert.Equal(2, waiting.Count);
+        Assert.All(waiting, account => Assert.Equal([gold.Id], account.SuggestedCardIds));
+
+        // Once a person links one, the card carries its digits and the other no longer fits.
+        await tracker.Cards.MapAsync(waiting.Single(account => account.LastFour == "1111").Id, gold.Id, Ct);
+        Assert.Equal("1111", Assert.Single(await tracker.Store.GetCardsAsync(Ct)).LastFour);
+        Assert.Empty(Assert.Single(await tracker.Cards.GetNewAccountsAsync(Ct)).SuggestedCardIds);
+    }
+
+    [Fact]
     public async Task A_card_keeps_the_last_four_from_its_account_and_a_default_opening_date()
     {
         await using var tracker = await Tracker.StartAsync();

@@ -60,7 +60,9 @@ configuration, not in the database, not in logs, and error messages never quote 
 2. **Review**: every account the feed reports waits here. Confirm the cards (the product
    is suggested from the account name, the anniversary from the last annual fee charge
    when one is in the data) and dismiss everything else. Dismissing removes the
-   account's stored transactions and hides it for good.
+   account's stored transactions and hides it for good. An account that can only be
+   one of the cards already entered is linked to it by the sync and never waits; one
+   that could be two cards, or is named after the cardholder only, needs a person.
 3. For a card whose issuer is not connected in the Bridge, add it under **Manage** and
    mark its benefits by hand, or import the issuer's CSV export there.
 4. To reach back further than the feed does (about 90 days), import CSV exports per card.

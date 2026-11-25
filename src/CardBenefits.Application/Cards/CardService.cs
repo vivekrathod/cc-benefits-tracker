@@ -148,9 +148,48 @@ public sealed class CardService(ITrackerStore store, ICatalog catalog, Rematcher
         var account = await FindAccountAsync(feedAccountId, cancellationToken);
         var card = await FindCardAsync(cardId, cancellationToken);
 
+        await LinkAsync(account, card, cancellationToken);
+        await rematcher.RematchAllAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Links the new accounts that leave no doubt: exactly one card fits the account, and
+    /// no other new account is after that card. The rest wait for a person. Matching is
+    /// left to the caller, which replays once for the whole batch.
+    /// </summary>
+    /// <returns>How many accounts were linked.</returns>
+    public async Task<int> LinkCertainAsync(CancellationToken cancellationToken)
+    {
+        var certain = (await GetNewAccountsAsync(cancellationToken))
+            .Where(account => account.SuggestedCardIds.Count == 1)
+            .GroupBy(account => account.SuggestedCardIds[0])
+            .Where(group => group.Count() == 1)
+            .Select(group => group.Single())
+            .ToArray();
+
+        foreach (var waiting in certain)
+        {
+            await LinkAsync(
+                await FindAccountAsync(waiting.Id, cancellationToken),
+                await FindCardAsync(waiting.SuggestedCardIds[0], cancellationToken),
+                cancellationToken);
+        }
+
+        return certain.Length;
+    }
+
+    private async Task LinkAsync(FeedAccount account, Card card, CancellationToken cancellationToken)
+    {
         account.MapTo(card.Id);
         await store.SaveFeedAccountAsync(account, cancellationToken);
-        await rematcher.RematchAllAsync(cancellationToken);
+
+        // A seeded card has no digits yet. With them, a second account of the same product
+        // is told apart, and a re-linked connection finds its way back to this card.
+        if (card.LastFour is null && account.LastFour is { } lastFour)
+        {
+            card.RecordLastFour(lastFour);
+            await store.SaveCardAsync(card, cancellationToken);
+        }
     }
 
     /// <summary>Not a card. The account stays hidden and its stored transactions are removed.</summary>

@@ -34,7 +34,15 @@ Short notes on the choices that are not obvious from the code, newest concerns f
   authorised-user account that shows up separately should be dismissed.
 - **Feed account ids are not identity.** Cards have their own ids; feed accounts map
   to them. An unknown account always waits in the queue: it is never dropped and
-  never becomes a card by itself.
+  never becomes a new card by itself.
+- **An account is linked without asking only when nothing else fits.** After each
+  sync, a new account whose name gives a product is linked to an existing card when
+  exactly one open card of that product fits and no other new account wants it. With
+  a last four on both sides the digits must match; without, the card must not have a
+  live account yet. Linking copies the account's last four to a card that has none.
+  Two cards of one product, two accounts for one card, or an account named only after
+  the cardholder wait for a person. A one-word product name ("Gold", "Cash+") is
+  believed only when the connection or the account names the issuer.
 - **Transactions of undecided accounts are kept** so that confirming a card matches
   what is already there. Dismissing an account deletes its transactions.
 - **Posted dates are local dates.** The Bridge sends epoch seconds, mostly at noon

@@ -1,3 +1,4 @@
+using CardBenefits.Application.Cards;
 using CardBenefits.Application.Feeds;
 using CardBenefits.Application.Matching;
 using CardBenefits.Application.Ports;
@@ -9,7 +10,8 @@ namespace CardBenefits.Application.Sync;
 /// Pulls one feed into the store and replays matching. Used by the daily worker,
 /// by "sync now", and by CSV imports, which are just another feed.
 /// </summary>
-public sealed class SyncService(ITrackerStore store, Rematcher rematcher, IClock clock, TrackerSettings settings)
+public sealed class SyncService(
+    ITrackerStore store, CardService cards, Rematcher rematcher, IClock clock, TrackerSettings settings)
 {
     // The Bridge cuts a request off at 90 days.
     private const int LongestWindowDays = 89;
@@ -139,6 +141,8 @@ public sealed class SyncService(ITrackerStore store, Rematcher rematcher, IClock
             }
         }
 
+        // A new account that can only be one card is linked here, so its credits count at once.
+        await cards.LinkCertainAsync(cancellationToken);
         await rematcher.RematchAllAsync(cancellationToken);
 
         var run = new SyncRun(
@@ -160,7 +164,7 @@ public sealed class SyncService(ITrackerStore store, Rematcher rematcher, IClock
 
     /// <summary>
     /// Finds the feed account or records it as new. An account the service has never
-    /// seen waits in the queue; it is never dropped and never becomes a card by itself.
+    /// seen waits in the queue; it is never dropped and never becomes a new card by itself.
     /// </summary>
     private async Task<FeedAccount> TrackAsync(
         string feedName,

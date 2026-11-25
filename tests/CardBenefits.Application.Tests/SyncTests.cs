@@ -115,9 +115,10 @@ public class SyncTests
         tracker.Feed.Account("acct-2", "Gold Card (1234)", "Amex", Posted("new-2", "2026-11-10", 10, "AMEX DINING CREDIT"));
         await tracker.SyncAsync();
 
-        var relinked = Assert.Single(await tracker.Cards.GetNewAccountsAsync(Ct));
-        Assert.Equal([card.Id], relinked.SuggestedCardIds);
-        await tracker.Cards.MapAsync(relinked.Id, card.Id, Ct);
+        // Same product and same last four digits: it can only be that card, so nobody is asked.
+        Assert.Empty(await tracker.Cards.GetNewAccountsAsync(Ct));
+        var linked = (await tracker.Store.GetFeedAccountsAsync(Ct)).Single(account => account.AccountId == "acct-2");
+        Assert.Equal(card.Id, linked.CardId);
 
         Assert.Single(await tracker.Store.GetCardsAsync(Ct));
         Assert.Equal(Money.FromDollars(10), (await tracker.PeriodAsync(TestCatalog.Dining, "2026-10-08")).Used);

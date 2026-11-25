@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using CardBenefits.Application.Cards;
 using CardBenefits.Domain;
 using CardBenefits.Infrastructure.Catalog;
 
@@ -98,6 +99,19 @@ public class CatalogTests
         Assert.All(catalog.Products.SelectMany(product => catalog.BenefitsOf(product.Id)), benefit =>
             Assert.Equal(benefit.Detection == DetectionMode.Automatic, catalog.Rules.Any(rule => rule.BenefitId == benefit.Id)));
     }
+
+    [Theory]
+    // Account names in the shape institutions report them, with made-up digits.
+    [InlineData("American Express", "American Express Gold Card (1234)", "amex-gold")]
+    [InlineData("American Express", "Amex EveryDay® Card (1234)", "amex-everyday")]
+    [InlineData("American Express", "Blue Cash Everyday® (1234)", "amex-blue-cash-everyday")]
+    [InlineData("Chase Bank", "Chase Sapphire Preferred (1234)", "chase-sapphire-preferred")]
+    [InlineData("Citibank", "AT&T Points Plus® Card from Citi-1234 (1234)", "citi-at-t-points-plus")]
+    [InlineData("Coinbase", "Cash (USD)", null)]
+    [InlineData("Chase Bank", "TOTAL CHECKING (1234)", null)]
+    public void The_built_in_catalog_recognises_accounts_the_way_institutions_name_them(
+        string connection, string account, string? expected) =>
+        Assert.Equal(expected, ProductSuggester.Suggest(connection, account, JsonCatalog.Load(null).Products)?.Id);
 
     [Fact]
     public void A_catalog_file_on_disk_replaces_the_built_in_one()

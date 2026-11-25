@@ -148,21 +148,11 @@ try
         case "link-suggested":
         {
             var cardService = services.GetRequiredService<CardService>();
-            var queue = await cardService.GetNewAccountsAsync(none);
+            var linked = await cardService.LinkCertainAsync(none);
+            await services.GetRequiredService<Rematcher>().RematchAllAsync(none);
 
-            // Only the unambiguous: one candidate card for the account, and no other account wanting that card.
-            var certain = queue
-                .Where(account => account.SuggestedCardIds.Count == 1)
-                .GroupBy(account => account.SuggestedCardIds[0])
-                .Where(group => group.Count() == 1)
-                .Select(group => group.Single())
-                .ToArray();
-            foreach (var account in certain)
-            {
-                await cardService.MapAsync(account.Id, account.SuggestedCardIds[0], none);
-            }
-
-            Console.WriteLine($"Linked: {certain.Length}. Still waiting for a decision: {queue.Count - certain.Length}.");
+            var waiting = (await cardService.GetNewAccountsAsync(none)).Count;
+            Console.WriteLine($"Linked: {linked}. Still waiting for a decision: {waiting}.");
             return 0;
         }
 
