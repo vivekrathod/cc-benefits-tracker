@@ -59,7 +59,7 @@
             <button class="primary" disabled="@_busy" @onclick="() => UseAsync(null)">Mark used</button>
             @if (Period.HasDollarValue)
             {
-                <input type="number" min="0" step="0.01" placeholder="Part" @bind="_part" aria-label="Part used, in dollars" />
+                <input type="number" min="0" step="0.01" placeholder="Part" @bind="_part" @bind:event="oninput" aria-label="Part used, in dollars" />
                 <button disabled="@(_busy || _part is null or <= 0)" @onclick="() => UseAsync(_part)">Add part</button>
             }
         }

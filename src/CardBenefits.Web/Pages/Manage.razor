@@ -18,7 +18,7 @@
             <div class="muted">Edit a name in place to rename.</div>
         }
         <div class="fields">
-            <div><label>Add a person</label><input @bind="_newPerson" placeholder="Name" /></div>
+            <div><label>Add a person</label><input @bind="_newPerson" @bind:event="oninput" placeholder="Name" /></div>
             <div><button disabled="@(_busy || string.IsNullOrWhiteSpace(_newPerson))" @onclick="AddPersonAsync">Add</button></div>
         </div>
     </div>
