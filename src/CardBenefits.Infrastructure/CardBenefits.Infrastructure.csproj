@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\CardBenefits.Application\CardBenefits.Application.csproj" />
+    <ProjectReference Include="..\CardBenefits.Domain\CardBenefits.Domain.csproj" />
+  </ItemGroup>
+</Project>

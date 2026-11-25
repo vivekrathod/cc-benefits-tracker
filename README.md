@@ -8,6 +8,16 @@ manual entry is the exception.
 - Transactions arrive through an `ITransactionFeed` port: SimpleFIN Bridge or issuer CSV exports.
 - The domain (cards, benefits, periods, matching) has no dependency on the feed or the database.
 
+## Layout
+
+| Path | Purpose |
+| --- | --- |
+| `src/CardBenefits.Domain` | Entities, value objects, period generator, matcher. References nothing. |
+| `src/CardBenefits.Application` | Use cases and ports. References Domain. |
+| `src/CardBenefits.Infrastructure` | EF Core/SQLite, SimpleFIN and CSV feeds, notifiers. |
+| `src/CardBenefits.Api` | HTTP API, background workers, composition root. |
+| `tests/` | Test projects per layer. `LayerDependencyTests` enforces the reference rules above. |
+
 ## Build and test
 
 ```
