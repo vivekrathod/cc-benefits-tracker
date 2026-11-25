@@ -2,7 +2,7 @@
 <div class="fields">
     <div>
         <label>Find a card product</label>
-        <input placeholder="e.g. sapphire" @bind="_filter" @bind:event="oninput" />
+        <input placeholder="e.g. sapphire, or citi executive" @bind="_filter" @bind:event="oninput" />
     </div>
     <div>
         <label>Product</label>
@@ -15,6 +15,10 @@
         </select>
     </div>
 </div>
+@if (_filter.Trim().Length > 0 && !ProductSearch.Find(Products, _filter).Any())
+{
+    <div class="muted">No product matches that. Try fewer words, or pick "Other card (not in the catalog)" for a card that is not listed.</div>
+}
 
 @code {
     private string _filter = "";
@@ -29,9 +33,10 @@
     {
         get
         {
-            var words = _filter.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            return Products.Where(product =>
-                product.Id == Value || words.All(word => product.DisplayName.Contains(word, StringComparison.OrdinalIgnoreCase)));
+            // The picked product stays in the list while the filter text changes.
+            var found = ProductSearch.Find(Products, _filter);
+            var picked = Products.FirstOrDefault(product => product.Id == Value);
+            return picked is null || found.Contains(picked) ? found : found.Prepend(picked);
         }
     }
 

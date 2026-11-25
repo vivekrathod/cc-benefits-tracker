@@ -4,5 +4,5 @@ namespace CardBenefits.Domain;
 public sealed record CardProduct(
     string Id, string Issuer, string Name, Money AnnualFee, bool IsBusiness = false, string? PointsProgram = null)
 {
-    public string DisplayName => $"{Issuer} {Name}";
+    public string DisplayName => Issuer.Length == 0 ? Name : $"{Issuer} {Name}";
 }

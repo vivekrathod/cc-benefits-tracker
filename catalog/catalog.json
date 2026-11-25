@@ -17,6 +17,14 @@
   ],
   "products": [
     {
+      "id": "other-card",
+      "issuer": "",
+      "name": "Other card (not in the catalog)",
+      "annualFee": 0,
+      "isBusiness": false,
+      "benefits": []
+    },
+    {
       "id": "amex-amazon-business",
       "issuer": "Amex",
       "name": "Amazon Business",
@@ -5814,7 +5822,7 @@
     {
       "id": "citi-aadvantage-executive",
       "issuer": "Citi",
-      "name": "AAdvantage Executive",
+      "name": "AAdvantage Executive World Elite",
       "annualFee": 695,
       "isBusiness": false,
       "pointsProgram": "American AAdvantage",

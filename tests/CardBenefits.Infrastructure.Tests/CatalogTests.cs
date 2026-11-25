@@ -137,6 +137,27 @@ public class CatalogTests
     }
 
     [Fact]
+    public void A_card_the_catalog_does_not_know_can_still_be_added()
+    {
+        var other = JsonCatalog.Load(null).FindProduct("other-card");
+
+        Assert.NotNull(other);
+        Assert.Equal("Other card (not in the catalog)", other.DisplayName);
+        Assert.Empty(JsonCatalog.Load(null).BenefitsOf("other-card"));
+    }
+
+    [Fact]
+    public void A_product_carries_its_official_name_so_people_find_it()
+    {
+        var products = JsonCatalog.Load(null).Products
+            .Select(product => new CardBenefits.Contracts.ProductDto(product.Id, product.DisplayName, 0, product.IsBusiness, null))
+            .ToArray();
+
+        Assert.Equal("citi-aadvantage-executive", CardBenefits.Contracts.ProductSearch.Find(products, "Citi World Executive")[0].Id);
+        Assert.Equal("amex-gold", CardBenefits.Contracts.ProductSearch.Find(products, "american express gold card")[0].Id);
+    }
+
+    [Fact]
     public void A_catalog_file_on_disk_replaces_the_built_in_one()
     {
         using var folder = new TempFolder();
