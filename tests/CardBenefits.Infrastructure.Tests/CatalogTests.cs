@@ -129,6 +129,11 @@ public class CatalogTests
 
         // No longer on the issuer's benefit pages.
         Assert.Null(catalog.FindBenefit("amex-blue-cash-everyday:home-chef-credit"));
+
+        // An announced benefit waits for its first day instead of showing up early.
+        var inflight = catalog.FindBenefit("citi-aadvantage-platinum-select-world-elite:inflight-credit");
+        Assert.NotNull(inflight);
+        Assert.Equal(new DateOnly(2027, 1, 24), inflight.Lifetime.Start);
     }
 
     [Fact]

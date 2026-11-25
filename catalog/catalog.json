@@ -6098,7 +6098,42 @@
               "verified": false
             }
           ],
-          "notes": "Up to $30 per trip, $180 per year; link card at Turo.com/AAdvantagePlatinum."
+          "notes": "Up to $30 per completed trip, $180 per calendar year, as statement credits; link the card at Turo.com/AAdvantagePlatinum."
+        },
+        {
+          "id": "citi-aadvantage-platinum-select-world-elite:inflight-credit",
+          "name": "Inflight purchase credit",
+          "detection": "automatic",
+          "terms": [
+            {
+              "effectiveFrom": "2027-01-24",
+              "amount": 100,
+              "cadence": "annual",
+              "yearBasis": "calendar"
+            }
+          ],
+          "rules": [
+            {
+              "keyword": "inflight",
+              "amountCeiling": 100,
+              "verified": false
+            }
+          ],
+          "notes": "Announced for the 24 January 2027 revamp (annual fee rises to $150): up to $100 per calendar year in statement credits for inflight food, drinks and Wi-Fi, replacing the 25% inflight discount. From news coverage, not yet on the issuer's page."
+        },
+        {
+          "id": "citi-aadvantage-platinum-select-world-elite:walmart-plus",
+          "name": "Walmart\u002B membership",
+          "detection": "manual",
+          "terms": [
+            {
+              "effectiveFrom": "2027-01-24",
+              "amount": 0,
+              "cadence": "annual",
+              "yearBasis": "calendar"
+            }
+          ],
+          "notes": "Announced for the 24 January 2027 revamp: an annual Walmart\u002B membership (about $98). How it is claimed and when it renews are not published yet."
         }
       ]
     },

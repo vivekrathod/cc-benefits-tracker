@@ -18,6 +18,9 @@ Corrections made by hand, to carry over if the catalog is ever generated again:
 - 2026-11-25, Atmos Rewards Summit: Alaska Lounge passes are 2 per quarter that
   expire with the quarter, not 8 per cardmember year. Inflight Wi-Fi passes added.
 - 2026-11-25, U.S. Bank Altitude Connect: Priority Pass lounge visits added.
+- 2026-11-25, Citi AAdvantage Platinum Select: the inflight credit and Walmart+
+  membership announced for the 2027-01-24 revamp added, starting that day. The $150
+  fee from that date is not in the catalog; set it on the card when it is charged.
 
 ---
 
