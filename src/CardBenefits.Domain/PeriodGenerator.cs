@@ -6,6 +6,17 @@ namespace CardBenefits.Domain;
 /// </summary>
 public static class PeriodGenerator
 {
+    /// <summary>
+    /// The periods of a benefit on a card: only while the card was open, on the benefit's
+    /// product, and while the benefit existed.
+    /// </summary>
+    public static IReadOnlyList<PeriodSpec> Generate(Card card, BenefitDefinition benefit, DateRange window) =>
+        card.DaysOn(benefit.ProductId)
+            .Select(span => span.Intersect(benefit.Lifetime))
+            .OfType<DateRange>()
+            .SelectMany(eligibility => Generate(benefit.Terms, card.Anniversary, eligibility, window))
+            .ToArray();
+
     /// <param name="terms">Every set of terms the benefit has had, in any order.</param>
     /// <param name="anniversary">The card's anniversary, used by cardmember-year benefits.</param>
     /// <param name="eligibility">The days the card can use the benefit, for example from opening to closing.</param>
