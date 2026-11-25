@@ -85,8 +85,30 @@ public static class TrackerServices
         Directory.CreateDirectory(options.DataDirectory);
 
         var contexts = services.GetRequiredService<IDbContextFactory<TrackerDbContext>>();
-        await using var db = await contexts.CreateDbContextAsync(cancellationToken);
-        await db.Database.MigrateAsync(cancellationToken);
+        await using (var db = await contexts.CreateDbContextAsync(cancellationToken))
+        {
+            await db.Database.MigrateAsync(cancellationToken);
+        }
+
+        OwnerOnly(options.DatabasePath);
+    }
+
+    /// <summary>The database holds household transactions, so only its owner may read it.</summary>
+    internal static void OwnerOnly(string file)
+    {
+        if (OperatingSystem.IsWindows() || !File.Exists(file))
+        {
+            return;
+        }
+
+        try
+        {
+            File.SetUnixFileMode(file, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+        catch (Exception refused) when (refused is IOException or UnauthorizedAccessException)
+        {
+            // Some mounted file systems do not carry Unix modes. The folder's own protection applies there.
+        }
     }
 
     /// <summary>The live feed's name, or null while it is not configured.</summary>

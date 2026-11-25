@@ -96,13 +96,13 @@ public class ViewTests
         tracker.Feed.Account("acct-1", "Gold Card (1234)", "Amex");
         tracker.Feed.Errors.Add(new Feeds.FeedError("con.auth", "Sign in again.", "Amex"));
         await tracker.SyncAsync();
-        Assert.Equal("Sign in again.", (await tracker.Queries.GetSyncHealthAsync("simplefin", null, Ct)).Connections.Single().LastError);
+        Assert.Equal("Sign in again.", (await tracker.Queries.GetSyncHealthAsync("simplefin", true, null, Ct)).Connections.Single().LastError);
 
         tracker.Feed.Errors.Clear();
         tracker.Clock.Advance(TimeSpan.FromDays(1));
         await tracker.SyncAsync();
 
-        var amex = (await tracker.Queries.GetSyncHealthAsync("simplefin", null, Ct)).Connections.Single();
+        var amex = (await tracker.Queries.GetSyncHealthAsync("simplefin", true, null, Ct)).Connections.Single();
         Assert.Null(amex.LastError);
         Assert.Equal(tracker.Clock.Now, amex.LastOkAt);
     }

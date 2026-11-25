@@ -139,13 +139,27 @@ public class SyncTests
         var error = Assert.Single(run.Errors);
         Assert.Equal("Citi", error.ConnectionName);
 
-        var health = await tracker.Queries.GetSyncHealthAsync("simplefin", null, Ct);
+        var health = await tracker.Queries.GetSyncHealthAsync("simplefin", true, null, Ct);
         var citi = Assert.Single(health.Connections, connection => connection.ConnectionName == "Citi");
         Assert.Equal("Needs to be re-authenticated.", citi.LastError);
         Assert.Null(citi.LastOkAt);
         var amex = Assert.Single(health.Connections, connection => connection.ConnectionName == "Amex");
         Assert.Null(amex.LastError);
         Assert.NotNull(amex.LastOkAt);
+    }
+
+    [Fact]
+    public async Task Institutions_from_an_earlier_pull_still_show_when_no_live_feed_is_set_up()
+    {
+        await using var tracker = await Tracker.StartAsync();
+        tracker.Feed.Account("acct-1", "Gold Card (1234)", "Amex", Posted("t1", "2026-11-10", 10, "AMEX DINING CREDIT"));
+        tracker.Feed.Errors.Add(new FeedError("con.auth", "Needs to be re-authenticated.", "Citi"));
+        await tracker.SyncAsync();
+
+        var health = await tracker.Queries.GetSyncHealthAsync("simplefin", false, null, Ct);
+
+        Assert.False(health.FeedConfigured);
+        Assert.Equal(["Amex", "Citi"], health.Connections.Select(connection => connection.ConnectionName).Order());
     }
 
     [Fact]
@@ -162,7 +176,7 @@ public class SyncTests
         Assert.Equal("The SimpleFIN Bridge answered 503.", run.Failure);
         Assert.Equal(DateOnly.Parse("2026-11-10"), run.NewestStored);
         Assert.Equal(Money.FromDollars(10), (await tracker.PeriodAsync(TestCatalog.Dining, "2026-11-10")).Used);
-        Assert.Equal(run.Failure, (await tracker.Queries.GetSyncHealthAsync("simplefin", null, Ct)).LastFailure);
+        Assert.Equal(run.Failure, (await tracker.Queries.GetSyncHealthAsync("simplefin", true, null, Ct)).LastFailure);
     }
 
     [Fact]

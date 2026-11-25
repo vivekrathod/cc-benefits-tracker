@@ -132,7 +132,7 @@ internal static class TrackerApi
         // Sync
         api.MapGet("/sync", async (TrackerQueries queries, SyncService sync, ITransactionFeed feed, CancellationToken ct) =>
             await queries.GetSyncHealthAsync(
-                feed.IsConfigured ? feed.Name : null, await sync.NextManualSyncAsync(feed.Name, ct), ct));
+                feed.Name, feed.IsConfigured, await sync.NextManualSyncAsync(feed.Name, ct), ct));
         api.MapPost("/sync", async (SyncService sync, ITransactionFeed feed, TrackerQueries queries, CancellationToken ct) =>
         {
             if (!feed.IsConfigured)

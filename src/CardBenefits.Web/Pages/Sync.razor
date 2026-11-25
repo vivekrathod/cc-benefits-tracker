@@ -26,12 +26,12 @@
             </div>
         </div>
 
+    }
+
+    @if (_health.Connections.Count > 0)
+    {
         <h2>Institutions</h2>
         <div class="card">
-            @if (_health.Connections.Count == 0)
-            {
-                <p class="muted">No institution seen yet.</p>
-            }
             <table>
                 <tbody>
                     @foreach (var connection in _health.Connections)

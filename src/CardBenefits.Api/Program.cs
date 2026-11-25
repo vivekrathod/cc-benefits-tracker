@@ -3,6 +3,10 @@ using CardBenefits.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Lets "dotnet run" serve the web app in any environment. A published build carries
+// the files in wwwroot and does not need it.
+builder.WebHost.UseStaticWebAssets();
+
 builder.Services.AddTracker(builder.Configuration);
 builder.Services.AddHostedService<DailyWorker>();
 builder.Services.AddHealthChecks();

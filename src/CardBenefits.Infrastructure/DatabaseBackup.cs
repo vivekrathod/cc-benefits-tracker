@@ -15,6 +15,7 @@ public sealed class DatabaseBackup(ITrackerStore store, IClock clock, TrackerOpt
         }
 
         await store.BackupAsync(todays, cancellationToken);
+        TrackerServices.OwnerOnly(todays);
 
         foreach (var old in Directory.EnumerateFiles(folder, "tracker-*.db").OrderDescending().Skip(Math.Max(1, options.BackupsToKeep)))
         {

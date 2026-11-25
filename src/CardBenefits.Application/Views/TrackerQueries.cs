@@ -123,7 +123,7 @@ public sealed class TrackerQueries(ITrackerStore store, ICatalog catalog, IClock
 
     /// <summary>Last successful sync per institution, with the latest error each one reported.</summary>
     public async Task<SyncHealthDto> GetSyncHealthAsync(
-        string? liveFeedName, DateTimeOffset? nextManualSyncAt, CancellationToken cancellationToken)
+        string liveFeedName, bool feedConfigured, DateTimeOffset? nextManualSyncAt, CancellationToken cancellationToken)
     {
         var runs = await store.GetRecentSyncRunsAsync(60, cancellationToken);
         var accounts = await store.GetFeedAccountsAsync(cancellationToken);
@@ -165,7 +165,7 @@ public sealed class TrackerQueries(ITrackerStore store, ICatalog catalog, IClock
 
         var last = liveRuns.FirstOrDefault();
         return new SyncHealthDto(
-            liveFeedName is not null,
+            feedConfigured,
             last is null ? null : clock.ToLocal(last.StartedAt),
             last?.Failure,
             nextManualSyncAt,
@@ -173,9 +173,9 @@ public sealed class TrackerQueries(ITrackerStore store, ICatalog catalog, IClock
             runs.Take(20).Select(ToDto).ToArray());
     }
 
-    public async Task<SummaryDto> GetSummaryAsync(string? liveFeedName, CancellationToken cancellationToken)
+    public async Task<SummaryDto> GetSummaryAsync(string liveFeedName, CancellationToken cancellationToken)
     {
-        var health = await GetSyncHealthAsync(liveFeedName, null, cancellationToken);
+        var health = await GetSyncHealthAsync(liveFeedName, true, null, cancellationToken);
         var accounts = await store.GetFeedAccountsAsync(cancellationToken);
         return new SummaryDto(
             (await GetExpiringSoonAsync(null, cancellationToken)).Count,

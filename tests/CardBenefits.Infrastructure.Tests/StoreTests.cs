@@ -119,5 +119,12 @@ public class StoreTests : IAsyncLifetime
         Assert.Equal("tracker-20261113.db", kept[0]);
         var newest = Path.Combine(backups, kept[^1]!);
         Assert.True(new FileInfo(newest).Length > 4096);
+
+        if (!OperatingSystem.IsWindows())
+        {
+            var ownerOnly = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+            Assert.Equal(ownerOnly, File.GetUnixFileMode(newest));
+            Assert.Equal(ownerOnly, File.GetUnixFileMode(Path.Combine(_folder.Path, "tracker.db")));
+        }
     }
 }

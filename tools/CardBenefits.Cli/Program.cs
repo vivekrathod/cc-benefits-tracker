@@ -186,7 +186,9 @@ try
 
         Console.WriteLine(
             $"Accounts: {run.AccountsSeen}. Transactions received: {run.TransactionsReceived}, new or changed: {run.TransactionsChanged}. " +
-            $"Newest returned: {run.NewestReturned:yyyy-MM-dd}. Institutions reporting an error: {run.Errors.Count}.");
+            $"Newest returned: {run.NewestReturned:yyyy-MM-dd}. " +
+            $"Institutions reporting an error: {run.Errors.Count(error => error.ConnectionName is not null)}. " +
+            $"General warnings from the feed: {run.Errors.Count(error => error.ConnectionName is null)}.");
         return 0;
     }
 
