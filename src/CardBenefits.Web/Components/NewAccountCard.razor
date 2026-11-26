@@ -5,7 +5,13 @@
         <h3>@Account.Name</h3>
         <span class="muted">@Account.ConnectionName</span>
     </div>
-    <div class="muted">@(Account.TransactionCount == 1 ? "1 transaction" : $"{Account.TransactionCount} transactions") stored</div>
+    <div class="muted">
+        @if (Account.LastFour is not null)
+        {
+            <text>Account number ends in @Account.LastFour · </text>
+        }
+        @(Account.TransactionCount == 1 ? "1 transaction" : $"{Account.TransactionCount} transactions") stored
+    </div>
 
     @if (_error is not null)
     {
@@ -14,27 +20,45 @@
 
     @if (_mode == Mode.Closed)
     {
-        <div class="actions">
-            <button class="primary" @onclick="() => _mode = Mode.NewCard">It is a card</button>
+        @* Always the same three choices in the same order; the likely one stands out and says why. *@
+        @if (Likely == Mode.Existing)
+        {
+            <div class="muted hint">Suggested: link it. A card in your list looks like a match.</div>
+        }
+        else if (Likely == Mode.Closed)
+        {
+            <div class="muted hint">Suggested: ignore it. It does not look like a credit card.</div>
+        }
+        <div class="choices">
             @if (Cards.Count > 0)
             {
-                <button @onclick="() => _mode = Mode.Existing">It is a card I already have</button>
+                <div class="choice">
+                    <button class="@Emphasis(Mode.Existing)" @onclick="() => _mode = Mode.Existing">Link to a card I already have</button>
+                    <div class="muted">For a card that is already in your list. The account's credits then count toward that card's benefits.</div>
+                </div>
             }
-            <button disabled="@_busy" @onclick="DismissAsync">Not a card</button>
+            <div class="choice">
+                <button class="@Emphasis(Mode.NewCard)" @onclick="() => _mode = Mode.NewCard">Add as a new card</button>
+                <div class="muted">For a card that is not in your list yet. You choose whose it is and which card product, and it is added and linked in one step.</div>
+            </div>
+            <div class="choice">
+                <button class="@Emphasis(Mode.Closed)" disabled="@_busy" @onclick="DismissAsync">Ignore this account</button>
+                <div class="muted">For anything you do not want tracked: checking or savings, a loan, a closed card, a duplicate. The account is hidden and its stored transactions are removed. You can put it back from Manage.</div>
+            </div>
         </div>
     }
     else if (_mode == Mode.Existing)
     {
-        <label>Which card?</label>
+        <label>Which of your cards is this account?</label>
         <select @bind="_cardId">
             <option value="">Choose…</option>
             @foreach (var card in Cards.OrderByDescending(card => Account.SuggestedCardIds.Contains(card.Id)))
             {
-                <option value="@card.Id">@card.PersonName: @card.ProductName @card.LastFour @(Account.SuggestedCardIds.Contains(card.Id) ? "(likely)" : "")</option>
+                <option value="@card.Id">@card.PersonName: @card.ProductName @card.LastFour @(Account.SuggestedCardIds.Contains(card.Id) ? "(likely match)" : "")</option>
             }
         </select>
         <div class="actions">
-            <button class="primary" disabled="@(_busy || string.IsNullOrEmpty(_cardId))" @onclick="MapAsync">Link</button>
+            <button class="primary" disabled="@(_busy || string.IsNullOrEmpty(_cardId))" @onclick="MapAsync">Link to this card</button>
             <button class="quiet" @onclick="() => _mode = Mode.Closed">Cancel</button>
         </div>
     }
@@ -97,6 +121,17 @@
     private DateOnly? _openedOn;
 
     [Parameter, EditorRequired] public NewAccountDto Account { get; set; } = null!;
+
+    /// <summary>
+    /// The choice that most likely fits: linking when a card in the list matches, ignoring
+    /// (Closed stands for that here) when the account does not look like a card, else adding.
+    /// </summary>
+    private Mode Likely =>
+        Cards.Count > 0 && Account.SuggestedCardIds.Count > 0 ? Mode.Existing
+        : Account.LooksLikeCard ? Mode.NewCard
+        : Mode.Closed;
+
+    private string Emphasis(Mode choice) => choice == Likely ? "primary" : "";
 
     [Parameter, EditorRequired] public IReadOnlyList<PersonDto> People { get; set; } = [];
 

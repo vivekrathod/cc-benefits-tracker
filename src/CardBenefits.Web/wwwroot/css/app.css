@@ -141,6 +141,10 @@ button.quiet { border-color: transparent; color: var(--accent); padding: 6px 6px
 button.danger { color: var(--bad); }
 button:disabled { opacity: .5; cursor: default; }
 
+.choices { display: grid; gap: 12px; margin-top: 12px; }
+.choice > button { width: 100%; text-align: left; }
+.choice > .muted { margin: 4px 2px 0; }
+.hint { margin-top: 10px; color: var(--text); }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; align-items: center; }
 
 input, select {

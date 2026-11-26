@@ -13,11 +13,11 @@
     @if (_accounts.Count > 0)
     {
         <h2>New accounts (@_accounts.Count)</h2>
-        <p class="muted">Accounts the feed reported that are not cards yet. Until you decide, their transactions are kept so a card can be matched straight away; "Not a card" removes them and hides the account.</p>
+        <p class="muted">Accounts your bank connections reported that are not tied to a card yet. For each one, say what it is: a card already in your list, a new card, or something to ignore. A four-digit number in brackets after a name is the last four digits of the account or card number. Until you decide, the account's transactions are kept so its credits can be matched the moment you do.</p>
         @if (NotCards.Count > 0)
         {
             <div class="actions" style="margin:0 0 12px">
-                <button disabled="@_busy" @onclick="DismissNotCardsAsync">Dismiss the @NotCards.Count that do not look like cards</button>
+                <button disabled="@_busy" @onclick="DismissNotCardsAsync">Ignore the @NotCards.Count that do not look like cards</button>
             </div>
         }
         @if (_people!.Count == 0)
