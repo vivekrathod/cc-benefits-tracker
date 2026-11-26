@@ -20,7 +20,7 @@ are marked used with one tap.
 - **Sync**: last successful sync per institution, and a rationed "sync now".
 - **Manage**: people, cards, statement imports, product changes.
 
-The web app is installable on a phone (Add to Home Screen).
+The web app is installable on a phone (Add to Home Screen). It keeps a copy of itself for fast starts and picks up a new build on its own: when the server has one, an open app reloads once.
 
 ## Run it
 

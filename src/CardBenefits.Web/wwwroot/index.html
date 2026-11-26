@@ -25,7 +25,28 @@
         <a href="." class="reload">Reload</a>
     </div>
     <script src="_framework/blazor.webassembly.js"></script>
-    <script>navigator.serviceWorker.register('service-worker.js', { updateViaCache: 'none' });</script>
+    <script>
+        // The service worker keeps a copy of the app for fast starts. When the server has a newer
+        // build, the new worker takes over and the page reloads once so that it shows that build.
+        if ('serviceWorker' in navigator) {
+            const hadWorker = !!navigator.serviceWorker.controller;
+            let reloading = false;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (hadWorker && !reloading) {
+                    reloading = true;
+                    location.reload();
+                }
+            });
+            navigator.serviceWorker.register('service-worker.js', { updateViaCache: 'none' }).then(registration => {
+                // An app left open on a phone looks for a newer build each time it comes back into view.
+                document.addEventListener('visibilitychange', () => {
+                    if (document.visibilityState === 'visible') {
+                        registration.update().catch(() => { });
+                    }
+                });
+            });
+        }
+    </script>
 </body>
 
 </html>
