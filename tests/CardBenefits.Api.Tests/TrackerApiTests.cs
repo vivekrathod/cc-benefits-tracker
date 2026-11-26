@@ -23,6 +23,10 @@ public sealed class TrackerApiTests : IDisposable
         // The catalog's source lives on the internet, so the tests leave it alone.
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(host => host
             .UseSetting("Tracker:DataDirectory", _folder)
+            // The tests work out "today" from the UTC clock, so the service must count its days the same way.
+            // Left on its default zone it is a day behind for a few hours every evening, and a card that
+            // opens "today" then has its cardmember year end today instead of start today.
+            .UseSetting("Tracker:TimeZone", "UTC")
             .UseSetting("Tracker:Catalog:RefreshDays", "0"));
         _client = _factory.CreateClient();
     }
