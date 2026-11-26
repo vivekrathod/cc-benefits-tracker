@@ -1,0 +1,23 @@
+@inject ViewChoices Choices
+
+@if (Count > 0)
+{
+    <p>
+        <button class="quiet" @onclick="ToggleAsync">
+            @(Choices.ShowCardsWithoutBenefits ? "Hide" : "Show") @Count @(Count == 1 ? "card" : "cards") without recurring benefits
+        </button>
+    </p>
+}
+
+@code {
+    /// <summary>How many cards have nothing recurring to track.</summary>
+    [Parameter, EditorRequired] public int Count { get; set; }
+
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private Task ToggleAsync()
+    {
+        Choices.ShowCardsWithoutBenefits = !Choices.ShowCardsWithoutBenefits;
+        return OnChanged.InvokeAsync();
+    }
+}

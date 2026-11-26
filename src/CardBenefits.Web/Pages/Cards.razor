@@ -1,5 +1,6 @@
 @page "/cards"
 @inject TrackerClient Api
+@inject ViewChoices Choices
 
 <PageTitle>This period</PageTitle>
 <h1>This period</h1>
@@ -9,37 +10,91 @@
     {
         <p class="empty">No cards yet. New accounts from the feed wait under Review, or add a card under Manage.</p>
     }
+    else if (Shown.Count == 0)
+    {
+        <p class="empty">None of your cards has a recurring benefit to track.</p>
+    }
+    else
+    {
+        <p class="muted">Tap a card to see its benefits.</p>
+    }
 
-    @foreach (var person in _groups.GroupBy(group => group.Card.PersonName))
+    @foreach (var person in Shown.GroupBy(group => group.Card.PersonName))
     {
         <h2>@person.Key</h2>
-        @foreach (var group in person)
-        {
-            <div class="card">
-                <div class="head">
-                    <h3>@group.Card.ProductName @(group.Card.LastFour is null ? "" : $"···{group.Card.LastFour}")</h3>
-                    <span class="muted">fee @Format.Money(group.Card.AnnualFee) on @Format.Day(group.Card.NextFeeDate)</span>
-                </div>
-                @if (group.Periods.Count == 0)
-                {
-                    <p class="muted">No recurring benefits to track on this card.</p>
-                }
-                @foreach (var period in group.Periods)
-                {
-                    <PeriodRow @key="period.Id" Period="period" ShowNotes="true" OnChanged="LoadAsync" />
-                }
-                @if (group.Card.LinkedAccounts.Count == 0)
-                {
-                    <p class="muted">Not linked to the feed, so nothing is detected for this card. Mark benefits by hand, or import a statement under Manage.</p>
-                }
-            </div>
-        }
+        <div class="card folds">
+            @foreach (var group in person)
+            {
+                var open = Choices.OpenCards.Contains(group.Card.Id);
+                var left = group.Periods.Where(period => period.Status != "Used").ToArray();
+                var dollars = left.Where(period => period.HasDollarValue).Sum(period => period.Remaining);
+                <section class="fold" @key="group.Card.Id">
+                    <button class="fold-head" aria-expanded="@(open ? "true" : "false")" @onclick="() => Choices.Toggle(group.Card.Id)">
+                        <span class="fold-name">
+                            <span class="name">@group.Card.ProductName @(group.Card.LastFour is null ? "" : $"···{group.Card.LastFour}")</span>
+                            <span class="muted">
+                                @if (group.Periods.Count == 0)
+                                {
+                                    <text>No recurring benefits</text>
+                                }
+                                else if (left.Length == 0)
+                                {
+                                    <text>All @group.Periods.Count used</text>
+                                }
+                                else
+                                {
+                                    <text>@left.Length of @group.Periods.Count to use · next ends @Format.Day(left.Min(period => period.End))</text>
+                                }
+                            </span>
+                        </span>
+                        <span class="fold-side">
+                            @if (dollars > 0)
+                            {
+                                <span>@Format.Money(dollars) left</span>
+                            }
+                            else if (group.Periods.Count > 0 && left.Length == 0)
+                            {
+                                <span class="chip done">used</span>
+                            }
+                            @if (left.Length > 0 && left.Min(period => period.DaysLeft) is <= 7 and var days)
+                            {
+                                <span class="chip @(days <= 2 ? "now" : "soon")">@Format.DaysLeft(days)</span>
+                            }
+                        </span>
+                        <span class="fold-mark" aria-hidden="true">›</span>
+                    </button>
+                    @if (open)
+                    {
+                        <div class="fold-body">
+                            <p class="muted">Fee @Format.Money(group.Card.AnnualFee) on @Format.LongDay(group.Card.NextFeeDate)</p>
+                            @if (group.Periods.Count == 0)
+                            {
+                                <p class="muted">No recurring benefits to track on this card.</p>
+                            }
+                            @foreach (var period in group.Periods)
+                            {
+                                <PeriodRow @key="period.Id" Period="period" ShowNotes="true" OnChanged="LoadAsync" />
+                            }
+                            @if (group.Card.LinkedAccounts.Count == 0)
+                            {
+                                <p class="muted">Not linked to the feed, so nothing is detected for this card. Mark benefits by hand, or import a statement under Manage.</p>
+                            }
+                        </div>
+                    }
+                </section>
+            }
+        </div>
     }
+
+    <WithoutBenefitsToggle Count="@_groups.Count(group => !group.Card.HasBenefits)" OnChanged="StateHasChanged" />
 </Loader>
 
 @code {
     private IReadOnlyList<CardPeriodsDto>? _groups;
     private string? _error;
+
+    private IReadOnlyList<CardPeriodsDto> Shown =>
+        [.. _groups!.Where(group => group.Card.HasBenefits || Choices.ShowCardsWithoutBenefits)];
 
     protected override Task OnInitializedAsync() => LoadAsync();
 

@@ -106,6 +106,19 @@ p { margin: 6px 4px; }
 .card > .head > span { white-space: nowrap; }
 .card > .head > h3 { overflow-wrap: anywhere; }
 .muted { color: var(--muted); font-size: .88rem; }
+/* A list of cards, one line each, that opens to show the card's benefits. */
+.card.folds { padding: 0 14px; }
+.fold { border-top: 1px solid var(--line); }
+.fold:first-child { border-top: 0; }
+.fold-head { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 56px; padding: 10px 0; border: 0; border-radius: 0; background: none; text-align: left; }
+.fold-name { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.fold-name .name { font-weight: 600; overflow-wrap: anywhere; }
+.fold-side { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.fold-mark { color: var(--muted); font-size: 1.3rem; line-height: 1; transition: transform .15s; }
+.fold-head[aria-expanded=true] .fold-mark { transform: rotate(90deg); }
+.fold-body { padding: 0 0 10px; }
+.fold-body > p { margin: 0 0 4px; }
+
 .empty { color: var(--muted); text-align: center; padding: 28px 12px; }
 .error { background: color-mix(in srgb, var(--bad) 14%, var(--surface)); border: 1px solid var(--bad); color: var(--text); border-radius: 10px; padding: 10px 12px; margin: 0 0 12px; }
 .note { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: 0 0 12px; }

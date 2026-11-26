@@ -207,6 +207,9 @@ public sealed class TrackerQueries(ITrackerStore store, ICatalog catalog, IClock
         var accounts = await store.GetFeedAccountsAsync(cancellationToken);
         var domain = (await store.GetCardsAsync(cancellationToken)).ToDictionary(card => card.Id);
 
+        var periods = await store.GetPeriodsAsync(null, cancellationToken);
+        var withOpenPeriods = periods.Where(period => period.Range.End >= today).Select(period => period.CardId).ToHashSet();
+
         var cards = domain.Values.ToDictionary(card => card.Id, card =>
         {
             var product = catalog.FindProduct(card.CurrentProductId);
@@ -229,10 +232,14 @@ public sealed class TrackerQueries(ITrackerStore store, ICatalog catalog, IClock
                     .Where(account => account.CardId == card.Id)
                     .Select(account => account.Feed == TrackerSettings.CsvFeedName ? "CSV import" : $"{account.ConnectionName}: {account.Name}")
                     .Order(StringComparer.OrdinalIgnoreCase)
-                    .ToArray());
+                    .ToArray(),
+                // Something recurring to track: a benefit its product still has, or a period still running
+                // from a product it had before.
+                withOpenPeriods.Contains(card.Id)
+                    || catalog.BenefitsOf(card.CurrentProductId).Any(benefit => benefit.LastDay is null || benefit.LastDay >= today));
         });
 
-        return new Snapshot(domain, cards, await store.GetPeriodsAsync(null, cancellationToken), catalog, today);
+        return new Snapshot(domain, cards, periods, catalog, today);
     }
 
     private sealed record Snapshot(

@@ -75,6 +75,24 @@ public class ViewTests
     }
 
     [Fact]
+    public async Task A_card_says_whether_it_has_recurring_benefits_so_the_benefit_views_can_leave_it_out()
+    {
+        await using var tracker = await Tracker.StartAsync();
+        await tracker.CardAsync();
+        await tracker.CardAsync(product: TestCatalog.Plain, accountId: "acct-2", accountName: "Freedom Flex (5678)");
+
+        var cards = await tracker.Queries.GetCardsAsync(Ct);
+        var period = await tracker.Queries.GetThisPeriodAsync(Ct);
+        var value = await tracker.Queries.GetCardValueAsync(Ct);
+
+        (string, bool)[] expected = [("Amex Gold", true), ("Chase Freedom Flex", false)];
+        Assert.Equal(expected, cards.OrderBy(card => card.ProductName).Select(card => (card.ProductName, card.HasBenefits)));
+        Assert.Equal(expected, period.Select(group => (group.Card.ProductName, group.Card.HasBenefits)));
+        Assert.Equal(expected, value.Select(row => (row.Card.ProductName, row.Card.HasBenefits)));
+        Assert.Empty(period.Single(group => !group.Card.HasBenefits).Periods);
+    }
+
+    [Fact]
     public async Task The_summary_counts_what_needs_attention()
     {
         await using var tracker = await Tracker.StartAsync();

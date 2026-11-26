@@ -1,5 +1,6 @@
 @page "/value"
 @inject TrackerClient Api
+@inject ViewChoices Choices
 
 <PageTitle>Card value</PageTitle>
 <h1>Card value</h1>
@@ -10,8 +11,12 @@
     {
         <p class="empty">No cards yet.</p>
     }
+    else if (Shown.Count == 0)
+    {
+        <p class="empty">None of your cards has a recurring benefit to track.</p>
+    }
 
-    @foreach (var person in _values.GroupBy(value => value.Card.PersonName))
+    @foreach (var person in Shown.GroupBy(value => value.Card.PersonName))
     {
         <h2>@person.Key</h2>
         <div class="card">
@@ -36,11 +41,16 @@
             </table>
         </div>
     }
+
+    <WithoutBenefitsToggle Count="@_values.Count(value => !value.Card.HasBenefits)" OnChanged="StateHasChanged" />
 </Loader>
 
 @code {
     private IReadOnlyList<CardValueDto>? _values;
     private string? _error;
+
+    private IReadOnlyList<CardValueDto> Shown =>
+        [.. _values!.Where(value => value.Card.HasBenefits || Choices.ShowCardsWithoutBenefits)];
 
     protected override async Task OnInitializedAsync()
     {

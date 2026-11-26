@@ -12,6 +12,10 @@ public sealed record ProductDto(
 public sealed record BenefitDto(
     string Id, string Name, bool Manual, decimal Amount, string Cadence, string YearBasis, string? Notes);
 
+/// <summary>
+/// A card of the household. <c>HasBenefits</c> is false when there is nothing recurring to track on it,
+/// which is what lets the benefit views leave such a card out.
+/// </summary>
 public sealed record CardDto(
     Guid Id,
     Guid PersonId,
@@ -26,7 +30,8 @@ public sealed record CardDto(
     decimal AnnualFee,
     DateOnly NextFeeDate,
     string? PointsProgram,
-    IReadOnlyList<string> LinkedAccounts);
+    IReadOnlyList<string> LinkedAccounts,
+    bool HasBenefits = true);
 
 public sealed record PeriodDto(
     Guid Id,

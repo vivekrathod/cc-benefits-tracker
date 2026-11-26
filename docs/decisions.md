@@ -68,6 +68,10 @@ Short notes on the choices that are not obvious from the code, newest concerns f
 - **Cardmember-year boundaries are counted from the anniversary itself**, so a
   clamped date (the 31st in a 30-day month) never shifts the ones after it.
 - **Card value** counts a period in the cardmember year it ends in.
+- **A card with nothing recurring to track stays out of This period and Card value**
+  unless asked for on those screens. It has something to track when its product still
+  has a benefit, or a period from a product it had before is still running. Manage
+  always lists every card.
 
 ## Catalog
 
