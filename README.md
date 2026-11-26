@@ -119,6 +119,7 @@ Everything is under the `Tracker` section (`Tracker__Name` as an environment var
 
 ```
 tracker status | cards | replay | sync | catalog
+tracker backup <name>                      (a copy in backups/, safe while the service runs)
 tracker import-cards <seed.json>
 tracker import-csv <card id or last four> <file.csv>
 tracker import-pull <saved-simplefin-response.json>
@@ -128,6 +129,11 @@ tracker import-catalog <dataset.json> <catalog.json>
 ```
 
 In the container: `docker compose exec tracker dotnet cli/tracker.dll <command>`.
+
+Take a copy of the database with `tracker backup`, inside the container, or stop the
+container first. Do not open or copy `tracker.db` from the host while the container
+runs: the host cannot see the container's locks, and SQLite can then drop what the
+service wrote last.
 From a checkout: `dotnet run --project tools/CardBenefits.Cli -- <command> --data <folder>`.
 
 ## How it is built

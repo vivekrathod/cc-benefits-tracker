@@ -27,6 +27,8 @@ const string Usage = """
       link-suggested                  Link new feed accounts to existing cards where exactly one card fits.
       sync                            Pull from the SimpleFIN Bridge now.
       replay                          Rebuild periods and matching from the stored transactions.
+      backup <name>                   Copy the database to backups/copy-<name>.db. Safe while the service runs;
+                                      copying the file from outside the container is not.
       catalog                         Where the catalog stands against its source, and what a refresh flagged.
       claim <access-url-file>         Exchange a setup token (read from standard input) for the access URL file.
       import-catalog <dataset.json> <catalog.json>
@@ -162,6 +164,13 @@ try
             await PrintStatusAsync();
             return 0;
 
+        case "backup" when arguments.Count == 2:
+        {
+            var copy = await services.GetRequiredService<DatabaseBackup>().CopyNowAsync(arguments[1], none);
+            Console.WriteLine($"Copied to {copy} ({new FileInfo(copy).Length} bytes).");
+            return 0;
+        }
+
         case "catalog":
         {
             // Read from the saved copy. The running service does the refreshing; see "Sync health" there.
@@ -234,7 +243,7 @@ try
                 : string.Join(", ", review.GroupBy(item => item.Reason).Select(group => $"{group.Key} {group.Count()}"))));
     }
 }
-catch (Exception failure) when (failure is RequestRejectedException or NotFoundException or InvalidOperationException or IOException)
+catch (Exception failure) when (failure is RequestRejectedException or NotFoundException or InvalidOperationException or IOException or ArgumentException)
 {
     Console.Error.WriteLine(failure.Message);
     return 1;

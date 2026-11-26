@@ -132,4 +132,45 @@ public class StoreTests : IAsyncLifetime
             }
         }
     }
+
+    [Fact]
+    public async Task A_named_copy_holds_the_data_stays_private_and_is_never_pruned()
+    {
+        var backups = Path.Combine(_folder.Path, "backups");
+        var backup = _services.GetRequiredService<DatabaseBackup>();
+        var card = new Card(Guid.NewGuid(), Guid.NewGuid(), "first", DateOnly.Parse("2024-02-29"), new Anniversary(2, 29));
+        await Store.SaveCardAsync(card, Ct);
+
+        var copy = await backup.CopyNowAsync("before-rollout-0a71a5a", Ct);
+
+        Assert.Equal(Path.Combine(backups, "copy-before-rollout-0a71a5a.db"), copy);
+        await using (var connection = new SqliteConnection($"Data Source={copy};Mode=ReadOnly"))
+        {
+            await connection.OpenAsync(Ct);
+            await using var count = connection.CreateCommand();
+            count.CommandText = "SELECT COUNT(*) FROM Cards";
+            Assert.Equal(1L, await count.ExecuteScalarAsync(Ct));
+        }
+
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(copy));
+        }
+
+        // A week of daily copies comes and goes; the named one and one named by hand in the old style both stay.
+        File.WriteAllText(Path.Combine(backups, "tracker-before-something.db"), "by hand");
+        for (var day = 10; day <= 24; day++)
+        {
+            File.WriteAllText(Path.Combine(backups, $"tracker-202611{day}.db"), "old");
+        }
+
+        await backup.RunIfDueAsync(Ct);
+
+        var kept = Directory.GetFiles(backups).Select(Path.GetFileName).ToArray();
+        Assert.Contains("copy-before-rollout-0a71a5a.db", kept);
+        Assert.Contains("tracker-before-something.db", kept);
+        Assert.Equal(7, kept.Count(name => name!.StartsWith("tracker-2026", StringComparison.Ordinal)));
+
+        await Assert.ThrowsAsync<ArgumentException>(() => backup.CopyNowAsync("../outside", Ct));
+    }
 }
