@@ -92,6 +92,8 @@ public interface ITrackerStore
     // Reminders already sent, so a nudge goes out once
     Task<bool> TryRecordReminderAsync(string key, DateTimeOffset sentAt, CancellationToken cancellationToken);
 
+    Task<bool> HasReminderAsync(string key, CancellationToken cancellationToken);
+
     Task ForgetReminderAsync(string key, CancellationToken cancellationToken);
 
     // Miles and points
@@ -103,10 +105,20 @@ public interface ITrackerStore
     /// <summary>Removes every reading of one person's balance in one program.</summary>
     Task DeleteBalancesAsync(Guid personId, string program, CancellationToken cancellationToken);
 
+    /// <summary>The newest attempt of every account: how each is doing now.</summary>
     Task<IReadOnlyList<BalanceCheck>> GetBalanceChecksAsync(CancellationToken cancellationToken);
 
-    /// <summary>Saves how the latest check of an account went, replacing what was stored for that account.</summary>
+    /// <summary>Every attempt since a moment, oldest first.</summary>
+    Task<IReadOnlyList<BalanceCheck>> GetBalanceAttemptsAsync(DateTimeOffset since, CancellationToken cancellationToken);
+
+    /// <summary>Adds an attempt to an account's history. An attempt already known, by account and time, is replaced.</summary>
     Task SaveBalanceCheckAsync(BalanceCheck check, CancellationToken cancellationToken);
+
+    /// <summary>Forgets every attempt of one account. Its balances stay.</summary>
+    Task<int> DeleteBalanceChecksAsync(string account, CancellationToken cancellationToken);
+
+    /// <summary>Removes attempts older than a moment, except the newest of each account.</summary>
+    Task<int> DeleteBalanceAttemptsBeforeAsync(DateTimeOffset before, CancellationToken cancellationToken);
 
     /// <summary>Writes a consistent copy of the whole database to a file.</summary>
     Task BackupAsync(string path, CancellationToken cancellationToken);

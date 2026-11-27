@@ -132,7 +132,9 @@ public sealed record ImportResultDto(int Received, int Changed);
 
 /// <summary>
 /// A person's miles or points in one program, as last read. <c>AgeDays</c> says how old the reading is.
-/// <c>ExpiresSoon</c> is true from the first expiry reminder onward.
+/// <c>ExpiresSoon</c> is true from the first expiry reminder onward. <c>Stale</c> is null while the
+/// reading is recent; otherwise it says why it is old: the status of the check that is failing,
+/// "Overdue" when the check simply has not run, or "NotChecked" when nothing checks it any more.
 /// </summary>
 public sealed record BalanceDto(
     Guid PersonId,
@@ -144,13 +146,50 @@ public sealed record BalanceDto(
     string Source,
     DateOnly? ExpiresOn,
     int? DaysUntilExpiry,
-    bool ExpiresSoon);
+    bool ExpiresSoon,
+    string? Stale = null);
 
-/// <summary>How the latest automatic check of one account went. Any status but "Ok" needs a look.</summary>
+/// <summary>
+/// How the latest automatic check of one account went, with its recent history. Any status but
+/// "Ok" needs a look, and so does a check that is <c>Overdue</c>: nothing was heard for over a day.
+/// </summary>
 public sealed record BalanceCheckDto(
-    string Account, string Owner, string Program, string Status, string? Problem, DateTimeOffset CheckedAt);
+    string Account, string Owner, string Program, string Status, string? Problem, DateTimeOffset CheckedAt)
+{
+    public string? ErrorCode { get; init; }
 
-public sealed record BalancesDto(IReadOnlyList<BalanceDto> Balances, IReadOnlyList<BalanceCheckDto> Checks);
+    /// <summary>What a person can do about the problem, when there is something.</summary>
+    public string? Advice { get; init; }
+
+    /// <summary>When the failures the account is in began.</summary>
+    public DateTimeOffset? FailingSince { get; init; }
+
+    public bool Overdue { get; init; }
+
+    /// <summary>True while the failure is of a kind that is tried again without anyone asking.</summary>
+    public bool RetriesItself { get; init; }
+
+    public int SignInsToday { get; init; }
+
+    /// <summary>True when a person may ask for a check now: the automation answers and today's limit is not reached.</summary>
+    public bool CanCheckNow { get; init; }
+
+    /// <summary>True while a check a person asked for is waiting or running.</summary>
+    public bool Queued { get; init; }
+
+    /// <summary>The latest attempts, oldest first.</summary>
+    public IReadOnlyList<BalanceAttemptDto> Recent { get; init; } = [];
+}
+
+public sealed record BalanceAttemptDto(DateTimeOffset CheckedAt, string Status, bool SignedIn, string? ErrorCode);
+
+/// <summary>The automation the tracker asks for checks. <c>UnreachableSince</c> is set while it does not answer.</summary>
+public sealed record BalanceCheckerDto(
+    DateTimeOffset? UnreachableSince, string? Problem, string? Running, TimeOnly DailyAt, int SignInsPerDay);
+
+/// <summary><c>Checker</c> is null when no automation is connected and results only arrive pushed.</summary>
+public sealed record BalancesDto(
+    IReadOnlyList<BalanceDto> Balances, IReadOnlyList<BalanceCheckDto> Checks, BalanceCheckerDto? Checker = null);
 
 /// <summary>What became of one account in an automation's output. <c>Recorded</c> is false when the reading was already known.</summary>
 public sealed record BalanceImportLineDto(string Account, string Status, bool Recorded, string? Problem);

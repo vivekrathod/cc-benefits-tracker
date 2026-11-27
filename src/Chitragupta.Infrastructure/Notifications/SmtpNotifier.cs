@@ -5,12 +5,12 @@ using Chitragupta.Application.Ports;
 namespace Chitragupta.Infrastructure.Notifications;
 
 /// <summary>Reminders by email. The password is read from a file each time, never from configuration.</summary>
-internal sealed class SmtpNotifier(SmtpOptions options) : INotifier
+internal sealed class SmtpNotifier(SmtpOptions options, IReadOnlyList<string> recipients) : INotifier
 {
     public async Task SendAsync(Notification notification, CancellationToken cancellationToken)
     {
         using var message = new MailMessage { From = Sender(options.From), Subject = notification.Subject, Body = notification.Body };
-        foreach (var recipient in options.Recipients)
+        foreach (var recipient in recipients)
         {
             message.To.Add(recipient);
         }

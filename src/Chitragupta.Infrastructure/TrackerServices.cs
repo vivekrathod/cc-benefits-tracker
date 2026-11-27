@@ -47,6 +47,10 @@ public static class TrackerServices
             BalanceNudgeDaysBefore = options.Reminders.BalanceNudgeDaysBefore,
             DigestDay = options.Reminders.DigestDay,
             DigestAt = options.Reminders.DigestAt,
+            BalanceCheckAt = options.Balances.DailyAt,
+            BalanceSignInsPerDay = options.Balances.SignInsPerDay,
+            BalanceRetryAfterHours = options.Balances.RetryAfterHours,
+            BalanceStaleAfterDays = options.Balances.StaleAfterDays,
         });
 
         services.AddSingleton<IClock>(new SystemClock(TimeZoneInfo.FindSystemTimeZoneById(options.TimeZone)));
@@ -63,14 +67,21 @@ public static class TrackerServices
         services.AddHttpClient<SimpleFinFeed>(http => http.Timeout = TimeSpan.FromMinutes(2));
         services.AddSingleton<ITransactionFeed>(provider => provider.GetRequiredService<SimpleFinFeed>());
 
-        if (options.Smtp.IsConfigured)
-        {
-            services.AddSingleton<INotifier>(new SmtpNotifier(options.Smtp));
-        }
-        else
-        {
-            services.AddSingleton<INotifier, LogNotifier>();
-        }
+        // A live sign-in can take minutes: a code has to arrive by mail and be typed in.
+        services.AddHttpClient<UdaanChecker>(http => http.Timeout = TimeSpan.FromMinutes(10));
+        services.AddSingleton(options.Udaan);
+        services.AddSingleton<IBalanceChecker>(provider => provider.GetRequiredService<UdaanChecker>());
+        services.AddSingleton<BalanceCheckerState>();
+        services.AddSingleton<BalanceCheckRunner>();
+
+        var recipients = options.ReminderRecipients;
+        services.AddSingleton<LogNotifier>();
+        services.AddHttpClient(nameof(GmailNotifier), http => http.Timeout = TimeSpan.FromSeconds(30));
+        services.AddSingleton<INotifier>(provider => new FirstReadyNotifier(
+            new GmailNotifier(
+                provider.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(GmailNotifier)), options.Gmail, recipients),
+            options.Smtp.IsConfigured && recipients.Count > 0 ? new SmtpNotifier(options.Smtp, recipients) : null,
+            provider.GetRequiredService<LogNotifier>()));
 
         services.AddSingleton<Rematcher>();
         services.AddSingleton<SyncService>();

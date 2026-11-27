@@ -10,15 +10,24 @@ services:
       - "${CHITRAGUPTA_PORT:-8080}:8080"
     environment:
       Chitragupta__TimeZone: ${CHITRAGUPTA_TIMEZONE:-America/New_York}
-      # Files, not values: the access URL and the mail password never appear in configuration.
+      # Files, not values: the access URL, the tokens and the mail password never appear in configuration.
       Chitragupta__SimpleFin__AccessUrlFile: /run/secrets/simplefin-access-url
+      Chitragupta__Reminders__To__0: ${REMINDER_TO_1:-}
+      Chitragupta__Reminders__To__1: ${REMINDER_TO_2:-}
+      # Reminders go through Gmail from the moment this file exists, else by SMTP when a host is set, else to the log.
+      Chitragupta__Gmail__TokenFile: /run/secrets/gmail-send-token.json
       Chitragupta__Smtp__PasswordFile: /run/secrets/smtp-password
       Chitragupta__Smtp__Host: ${SMTP_HOST:-}
       Chitragupta__Smtp__Port: ${SMTP_PORT:-587}
       Chitragupta__Smtp__User: ${SMTP_USER:-}
       Chitragupta__Smtp__From: ${SMTP_FROM:-}
-      Chitragupta__Smtp__To__0: ${REMINDER_TO_1:-}
-      Chitragupta__Smtp__To__1: ${REMINDER_TO_2:-}
+      # udaan's service on the machine that runs Docker. Left empty, nothing is asked and results only arrive pushed.
+      Chitragupta__Udaan__Url: ${UDAAN_URL:-}
+      Chitragupta__Udaan__TokenFile: /run/secrets/udaan-token
+      Chitragupta__Balances__DailyAt: ${BALANCE_CHECK_AT:-12:30}
+    extra_hosts:
+      # Docker Desktop has this name built in. On Linux this line is what provides it.
+      - "host.docker.internal:host-gateway"
     volumes:
       - ${CHITRAGUPTA_DATA:-./data}:/data
       - ${CHITRAGUPTA_SECRETS:-./secrets}:/run/secrets:ro

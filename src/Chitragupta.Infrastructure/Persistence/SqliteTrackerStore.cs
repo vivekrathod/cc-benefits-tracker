@@ -465,6 +465,12 @@ internal sealed class SqliteTrackerStore(IDbContextFactory<TrackerDbContext> con
         return true;
     }
 
+    public async Task<bool> HasReminderAsync(string key, CancellationToken cancellationToken)
+    {
+        await using var db = await contexts.CreateDbContextAsync(cancellationToken);
+        return await db.Reminders.AnyAsync(row => row.Key == key, cancellationToken);
+    }
+
     public async Task ForgetReminderAsync(string key, CancellationToken cancellationToken)
     {
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
@@ -509,29 +515,62 @@ internal sealed class SqliteTrackerStore(IDbContextFactory<TrackerDbContext> con
         await db.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<BalanceCheck>> GetBalanceChecksAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<BalanceCheck>> GetBalanceChecksAsync(CancellationToken cancellationToken) =>
+        (await GetBalanceAttemptsAsync(DateTimeOffset.MinValue, cancellationToken))
+            .GroupBy(attempt => attempt.Account)
+            .Select(attempts => attempts.Last())
+            .ToArray();
+
+    public async Task<IReadOnlyList<BalanceCheck>> GetBalanceAttemptsAsync(DateTimeOffset since, CancellationToken cancellationToken)
     {
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
-        return (await db.BalanceChecks.AsNoTracking().ToListAsync(cancellationToken))
-            .Select(row => new BalanceCheck(row.Account, row.Owner, row.Program, row.Status, row.Problem, row.CheckedAt))
+        var from = since == DateTimeOffset.MinValue ? DateTimeOffset.UnixEpoch : since;
+        return (await db.BalanceAttempts.AsNoTracking()
+                .Where(row => row.CheckedAt >= from)
+                .OrderBy(row => row.CheckedAt)
+                .ThenBy(row => row.Id)
+                .ToListAsync(cancellationToken))
+            .Select(ToCheck)
             .ToArray();
     }
 
     public async Task SaveBalanceCheckAsync(BalanceCheck check, CancellationToken cancellationToken)
     {
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
-        var row = await db.BalanceChecks.FindAsync([check.Account], cancellationToken);
+        var row = await db.BalanceAttempts.FirstOrDefaultAsync(
+            known => known.Account == check.Account && known.CheckedAt == check.CheckedAt, cancellationToken);
         if (row is null)
         {
-            db.BalanceChecks.Add(row = new BalanceCheckRow { Account = check.Account });
+            db.BalanceAttempts.Add(row = new BalanceAttemptRow { Account = check.Account, CheckedAt = check.CheckedAt });
         }
 
         row.Owner = check.Owner;
         row.Program = check.Program;
         row.Status = check.Status;
         row.Problem = check.Problem;
-        row.CheckedAt = check.CheckedAt;
+        row.ErrorCode = check.ErrorCode;
+        row.Retryable = check.Retryable;
+        row.SignedIn = check.SignedIn;
+        row.Advice = check.Advice;
+        row.DurationSeconds = check.DurationSeconds;
+        row.ToolVersion = check.ToolVersion;
+        row.Trail = check.Trail;
         await db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<int> DeleteBalanceChecksAsync(string account, CancellationToken cancellationToken)
+    {
+        await using var db = await contexts.CreateDbContextAsync(cancellationToken);
+        return await db.BalanceAttempts.Where(row => row.Account == account).ExecuteDeleteAsync(cancellationToken);
+    }
+
+    public async Task<int> DeleteBalanceAttemptsBeforeAsync(DateTimeOffset before, CancellationToken cancellationToken)
+    {
+        await using var db = await contexts.CreateDbContextAsync(cancellationToken);
+        return await db.BalanceAttempts
+            .Where(row => row.CheckedAt < before
+                && db.BalanceAttempts.Any(newer => newer.Account == row.Account && newer.CheckedAt > row.CheckedAt))
+            .ExecuteDeleteAsync(cancellationToken);
     }
 
     public async Task BackupAsync(string path, CancellationToken cancellationToken)
@@ -569,6 +608,18 @@ internal sealed class SqliteTrackerStore(IDbContextFactory<TrackerDbContext> con
         new Money(row.AmountCents),
         row.Usage.OrderBy(usage => usage.Position)
             .Select(usage => new UsageEntry(new Money(usage.AmountCents), usage.Source, usage.TransactionId, usage.Note)));
+
+    private static BalanceCheck ToCheck(BalanceAttemptRow row) =>
+        new(row.Account, row.Owner, row.Program, row.Status, row.Problem, row.CheckedAt)
+        {
+            ErrorCode = row.ErrorCode,
+            Retryable = row.Retryable,
+            SignedIn = row.SignedIn,
+            Advice = row.Advice,
+            DurationSeconds = row.DurationSeconds,
+            ToolVersion = row.ToolVersion,
+            Trail = row.Trail,
+        };
 
     private static ReviewItem ToReviewItem(ReviewItemRow row) => new(
         row.Id, row.CardId, row.TransactionId, row.Reason, new Money(row.AmountCents), row.BenefitId);

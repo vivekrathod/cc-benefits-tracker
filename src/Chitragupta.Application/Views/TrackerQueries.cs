@@ -1,3 +1,4 @@
+using Chitragupta.Application.Balances;
 using Chitragupta.Application.Ports;
 using Chitragupta.Application.Sync;
 using Chitragupta.Contracts;
@@ -6,8 +7,11 @@ using Chitragupta.Domain;
 namespace Chitragupta.Application.Views;
 
 /// <summary>The read side: every screen is one of these queries.</summary>
-public sealed class TrackerQueries(ITrackerStore store, ICatalog catalog, IClock clock, TrackerSettings settings)
+public sealed class TrackerQueries(
+    ITrackerStore store, ICatalog catalog, IClock clock, TrackerSettings settings, IBalanceChecker checker, BalanceCheckerState checkerState)
 {
+    private const int RecentAttempts = 14;
+
     public async Task<IReadOnlyList<PersonDto>> GetPeopleAsync(CancellationToken cancellationToken) =>
         (await store.GetPeopleAsync(cancellationToken))
             .OrderBy(person => person.Name, StringComparer.OrdinalIgnoreCase)
@@ -180,39 +184,105 @@ public sealed class TrackerQueries(ITrackerStore store, ICatalog catalog, IClock
     /// </summary>
     public async Task<BalancesDto> GetBalancesAsync(CancellationToken cancellationToken)
     {
+        var now = clock.Now;
         var today = clock.Today;
-        var people = (await store.GetPeopleAsync(cancellationToken)).ToDictionary(person => person.Id, person => person.Name);
+        var people = await store.GetPeopleAsync(cancellationToken);
+        var names = people.ToDictionary(person => person.Id, person => person.Name);
         var warnFrom = settings.BalanceNudgeDaysBefore.DefaultIfEmpty(0).Max();
+        var asked = checker.IsConfigured ? checkerState.Read() : null;
+
+        var histories = CheckHistory.ByAccount(
+            await store.GetBalanceAttemptsAsync(now.AddDays(-settings.BalanceHistoryDays), cancellationToken));
+        var known = histories.Select(history => history.Account).ToHashSet();
+        // An account quiet for longer than the history is kept still has its newest attempt.
+        var all = histories
+            .Concat((await store.GetBalanceChecksAsync(cancellationToken))
+                .Where(check => !known.Contains(check.Account))
+                .Select(check => new CheckHistory(check.Account, [check])))
+            .ToArray();
+
+        var checks = all
+            .Select(history =>
+            {
+                var latest = history.Latest;
+                var signIns = history.SignInsOn(today, clock);
+                var waiting = asked is not null && (asked.Running == latest.Account || asked.Requested.Contains(latest.Account));
+                return new BalanceCheckDto(
+                    latest.Account, latest.Owner, latest.Program, latest.Status.ToString(), latest.Problem, clock.ToLocal(latest.CheckedAt))
+                {
+                    ErrorCode = latest.ErrorCode,
+                    Advice = latest.Advice,
+                    FailingSince = history.FailingSince is { } since ? clock.ToLocal(since) : null,
+                    Overdue = IsOverdue(latest, now),
+                    RetriesItself = latest is { NeedsAttention: true, Retryable: true } || latest.Status == BalanceCheckStatus.Blocked,
+                    SignInsToday = signIns,
+                    Queued = waiting,
+                    CanCheckNow = asked is { UnreachableSince: null }
+                        && asked.Accounts.Contains(latest.Account)
+                        && !waiting
+                        && signIns < settings.BalanceSignInsPerDay,
+                    Recent = history.Attempts
+                        .TakeLast(RecentAttempts)
+                        .Select(attempt => new BalanceAttemptDto(
+                            clock.ToLocal(attempt.CheckedAt), attempt.Status.ToString(), attempt.SignedIn, attempt.ErrorCode))
+                        .ToArray(),
+                };
+            })
+            .OrderBy(check => check.Status == "Ok" && !check.Overdue)
+            .ThenBy(check => check.Account, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 
         var balances = (await store.GetLatestBalancesAsync(cancellationToken))
             .Select(balance =>
             {
                 var days = balance.DaysUntilExpiry(today);
+                var age = today.DayNumber - clock.ToLocalDate(balance.AsOf).DayNumber;
                 return new BalanceDto(
                     balance.PersonId,
-                    people.GetValueOrDefault(balance.PersonId) ?? "",
+                    names.GetValueOrDefault(balance.PersonId) ?? "",
                     balance.Program,
                     balance.Amount,
                     clock.ToLocal(balance.AsOf),
-                    today.DayNumber - clock.ToLocalDate(balance.AsOf).DayNumber,
+                    age,
                     balance.Source.ToString(),
                     balance.ExpiresOn,
                     days,
-                    days <= warnFrom);
+                    days <= warnFrom,
+                    balance.Source == BalanceSource.Automation && age >= settings.BalanceStaleAfterDays
+                        ? WhyStale(balance, all, people)
+                        : null);
             })
             .OrderBy(balance => balance.PersonName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(balance => balance.DaysUntilExpiry ?? int.MaxValue)
             .ThenBy(balance => balance.Program, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        var checks = (await store.GetBalanceChecksAsync(cancellationToken))
-            .OrderBy(check => !check.NeedsAttention)
-            .ThenBy(check => check.Account, StringComparer.OrdinalIgnoreCase)
-            .Select(check => new BalanceCheckDto(
-                check.Account, check.Owner, check.Program, check.Status.ToString(), check.Problem, clock.ToLocal(check.CheckedAt)))
-            .ToArray();
+        return new BalancesDto(
+            balances,
+            checks,
+            asked is null
+                ? null
+                : new BalanceCheckerDto(
+                    asked.UnreachableSince is { } down ? clock.ToLocal(down) : null,
+                    asked.Problem,
+                    asked.Running,
+                    settings.BalanceCheckAt,
+                    settings.BalanceSignInsPerDay));
+    }
 
-        return new BalancesDto(balances, checks);
+    private bool IsOverdue(BalanceCheck latest, DateTimeOffset now) =>
+        now - latest.CheckedAt >= TimeSpan.FromHours(settings.BalanceOverdueAfterHours);
+
+    /// <summary>An old reading is explained by the check that should have renewed it: the one for the same person and program.</summary>
+    private static string WhyStale(ProgramBalance balance, IEnumerable<CheckHistory> histories, IReadOnlyList<Person> people)
+    {
+        var mine = histories
+            .Select(history => history.Latest)
+            .Where(check => Owners.Find(people, check.Owner) is { } owner && balance.IsFor(owner.Id, check.Program))
+            .ToArray();
+        return mine.FirstOrDefault(check => check.NeedsAttention) is { } failing
+            ? failing.Status.ToString()
+            : mine.Length > 0 ? "Overdue" : "NotChecked";
     }
 
     public async Task<SummaryDto> GetSummaryAsync(string liveFeedName, CancellationToken cancellationToken)
@@ -224,14 +294,20 @@ public sealed class TrackerQueries(ITrackerStore store, ICatalog catalog, IClock
         // Miles count with the benefits once they are inside the same window.
         var lapsing = (await store.GetLatestBalancesAsync(cancellationToken))
             .Count(balance => balance.DaysUntilExpiry(today) is { } days && days >= 0 && days <= settings.ExpiringSoonDays);
-        var failingChecks = (await store.GetBalanceChecksAsync(cancellationToken)).Count(check => check.NeedsAttention);
+
+        // One count for everything on the Points screen that wants a look: a check that is failing or has
+        // gone quiet, a reading nothing renews any more, and an automation that does not answer.
+        var points = await GetBalancesAsync(cancellationToken);
+        var balanceProblems = points.Checks.Count(check => check.Status != "Ok" || check.Overdue)
+            + points.Balances.Count(balance => balance.Stale == "NotChecked")
+            + (points.Checker?.UnreachableSince is null ? 0 : 1);
 
         return new SummaryDto(
             (await GetExpiringSoonAsync(null, cancellationToken)).Count + lapsing,
             (await store.GetReviewItemsAsync(cancellationToken)).Count,
             accounts.Count(account => account.Status == FeedAccountStatus.New),
             health.Connections.Count(connection => connection.LastError is not null) + (health.LastFailure is null ? 0 : 1),
-            failingChecks);
+            balanceProblems);
     }
 
     public SyncRunDto ToDto(SyncRun run) => new(

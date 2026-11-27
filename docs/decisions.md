@@ -60,20 +60,48 @@ Short notes on the choices that are not obvious from the code, newest concerns f
 
 ## Miles and points
 
-- **Balances are pushed in, never pulled.** Reading a balance means signing in to a
+- **The tracker asks, and udaan signs in.** Reading a balance means signing in to a
   loyalty program with a real browser, a password and a one-time code. That lives in a
-  separate tool (udaan) on a machine with a desktop. The tracker takes the JSON that tool
-  already prints, so it holds no login and "sync now" can never set off a sign-in.
+  separate tool (udaan) on a machine with a desktop: from a container the programs' sites
+  turned its browser away. udaan answers checks over HTTP on its own machine, and the
+  tracker asks it. The tracker still holds no login, and a transaction "sync now" can
+  never set off a sign-in. Results can also be pushed in, as before the service existed.
+- **The schedule is the tracker's, the safety rules are udaan's.** The tracker decides
+  when an account is due, keeps the history and sends the alerts, because it is the part
+  that is always up and has the screens. udaan decides whether a sign-in may happen now:
+  one at a time, a quarter of an hour apart, never again after a rejected login. It
+  answers "not now" with a time, and the tracker waits. Neither can talk the other out of
+  its half.
+- **What is due is worked out from the history, not remembered.** An account is due when
+  nothing was heard about it today and the daily time has passed. So a restart neither
+  repeats nor skips a check, a result somebody pushed in by hand counts, and there is no
+  job table to keep in step with reality.
+- **Sign-ins are rationed, and most failures are not retried.** Two a day for an account,
+  everything included. Only a failure udaan marks as safe to repeat gets a retry, once,
+  hours later. A locked account costs far more than a balance that is a day old.
+- **A refusal is kept, a "not now" is not.** When udaan declines because an account is
+  paused or held, that is the state of the account for the day and goes in the history,
+  marked as no sign-in. "Not now" is only about timing.
 - **One address for every account.** A result names its account, owner and program, so
-  the address does not have to. Running the accounts one at a time and spaced apart is
-  the runner script's job, not the API's.
-- **Everything known about udaan is in one parser**: its program keys, which number in a
-  result is the balance, and how it words a failure. A program it does not list is
-  reported as unknown instead of guessed at.
+  the address does not have to.
+- **Everything known about udaan's results is in one parser**: its program keys, which
+  number in a result is the balance, how it words a failure, and what a person can do
+  about each kind of failure. A program it does not list is reported as unknown instead
+  of guessed at. How to reach its service is in one adapter beside it.
 - **Readings are only added, and the newest is the balance.** A result's own check time
   decides, so the same result sent twice, or an old one arriving late, changes nothing.
-- **A failed check never touches a balance.** How the latest check of each account went
-  is stored separately and shown on the Points screen until a check works again.
+- **A failed check never touches a balance.** Attempts are stored apart from readings.
+  Every attempt is kept for 90 days, and the newest is how the account is doing now.
+- **Stale is about the reading, failing is about the check.** A balance udaan read is
+  marked stale at two days old, whatever the reason, and the mark names the reason: the
+  check that is failing, or that nothing was heard. A balance typed in is never stale.
+- **An alert is said once.** Each is recorded with the failure it is about, so a failure
+  that repeats daily is one email, then one more if it lasts two days, then one when it
+  clears. Alerts are plain rules over the history. Nothing with judgement sits between a
+  failure and the email about it.
+- **Reminders go through the Gmail API with a token that can only send.** No password is
+  stored, and the token cannot read mail. The way out is picked when a reminder is sent,
+  so signing in takes effect without a restart.
 - **An owner is matched to a person by name**, whole or first, and only when exactly one
   person fits. Anyone else waits: a result never creates a person, as a feed account
   never creates a card.
@@ -152,4 +180,5 @@ Short notes on the choices that are not obvious from the code, newest concerns f
   the nightly copies are still `tracker-<date>.db`: renaming a household's data gains
   nothing and is the one rename that could lose something.
 - **The balance runner is `tools/check-balances.sh`**, named for what it does and not for
-  the kind of balance. It runs whatever accounts udaan lists, miles or points.
+  the kind of balance. It runs whatever accounts udaan lists, miles or points. It is for
+  an install without udaan's service; with the service, the tracker does the asking.

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Chitragupta.Application.Balances;
 using Chitragupta.Application.Ports;
 using Chitragupta.Application.Views;
 using Chitragupta.Contracts;
@@ -7,13 +8,22 @@ using Chitragupta.Contracts;
 namespace Chitragupta.Application.Reminders;
 
 /// <summary>
-/// Sends the nudges before a period with value left runs out or miles lapse, and the weekly digest.
+/// Sends the nudges before a period with value left runs out or miles lapse, the alerts when an
+/// automatic balance check needs somebody, and the weekly digest.
 /// It is safe to call as often as the host likes: each reminder is recorded when it
 /// goes out and is never sent twice.
 /// </summary>
 public sealed class ReminderService(
-    ITrackerStore store, TrackerQueries queries, INotifier notifier, IClock clock, TrackerSettings settings)
+    ITrackerStore store,
+    TrackerQueries queries,
+    INotifier notifier,
+    IClock clock,
+    TrackerSettings settings,
+    BalanceCheckerState checkerState)
 {
+    /// <summary>After the automation comes back, the accounts take a while to be checked one by one.</summary>
+    private static readonly TimeSpan CatchUp = TimeSpan.FromHours(3);
+
     public async Task<int> RunAsync(CancellationToken cancellationToken)
     {
         var sent = 0;
@@ -27,12 +37,129 @@ public sealed class ReminderService(
             sent++;
         }
 
+        if (await SendCheckAlertsAsync(cancellationToken))
+        {
+            sent++;
+        }
+
         if (await SendDigestAsync(cancellationToken))
         {
             sent++;
         }
 
         return sent;
+    }
+
+    /// <summary>
+    /// One mail for whatever is new about the automatic checks: a failure only a person can clear,
+    /// a failure that has lasted, a check that works again after an alert, an account nothing
+    /// was heard about, and an automation that stopped answering. Each is said once.
+    /// </summary>
+    private async Task<bool> SendCheckAlertsAsync(CancellationToken cancellationToken)
+    {
+        var now = clock.Now;
+        var asked = checkerState.Read();
+        var histories = CheckHistory.ByAccount(
+            await store.GetBalanceAttemptsAsync(now.AddDays(-settings.BalanceHistoryDays), cancellationToken));
+
+        var needsYou = new List<string>();
+        var stillFailing = new List<string>();
+        var recovered = new List<string>();
+        var quiet = new List<string>();
+        var keys = new List<string>();
+        string? first = null;
+
+        async Task<bool> NewAsync(string key)
+        {
+            if (!await store.TryRecordReminderAsync(key, now, cancellationToken))
+            {
+                return false;
+            }
+
+            keys.Add(key);
+            return true;
+        }
+
+        foreach (var history in histories)
+        {
+            var latest = history.Latest;
+            var name = $"{latest.Account} ({latest.Program})";
+            if (history.FailingSince is { } since)
+            {
+                var told = latest.NeedsAPerson && await NewAsync(AlertKey("needs-you", latest.Account, since));
+                var lasting = now - since >= TimeSpan.FromDays(settings.BalanceStillFailingAfterDays)
+                    && await NewAsync(AlertKey("still-failing", latest.Account, since));
+                if (told || lasting)
+                {
+                    var line = new StringBuilder();
+                    line.Append(CultureInfo.InvariantCulture, $"- {name}: {CheckHistory.Words(latest.Status)} since {Moment(since)}.");
+                    line.Append(latest.Problem is null ? "" : $" {latest.Problem}");
+                    line.Append(latest.Advice is null ? "\n" : $"\n  What to do: {latest.Advice}\n");
+                    (told ? needsYou : stillFailing).Add(line.ToString());
+                    first ??= told ? $"Balance check needs you: {name}" : $"Balance check still failing: {name}";
+                }
+            }
+            else if (history.RecoveredFrom is { } from
+                && (await store.HasReminderAsync(AlertKey("needs-you", latest.Account, from), cancellationToken)
+                    || await store.HasReminderAsync(AlertKey("still-failing", latest.Account, from), cancellationToken))
+                && await NewAsync(AlertKey("recovered", latest.Account, from)))
+            {
+                recovered.Add(string.Create(CultureInfo.InvariantCulture, $"- {name}: read again {Moment(latest.CheckedAt)}.\n"));
+                first ??= $"Balance check works again: {name}";
+            }
+
+            // While the automation is away, or has only just come back, a quiet account is its doing and is said once, below.
+            var catchingUp = asked.UnreachableSince is not null || now - asked.ReachableSince < CatchUp;
+            if (!catchingUp
+                && now - latest.CheckedAt >= TimeSpan.FromHours(settings.BalanceOverdueAfterHours)
+                && await NewAsync(AlertKey("overdue", latest.Account, latest.CheckedAt)))
+            {
+                quiet.Add(string.Create(CultureInfo.InvariantCulture, $"- {name}: nothing heard since {Moment(latest.CheckedAt)}.\n"));
+                first ??= $"Balance check has gone quiet: {name}";
+            }
+        }
+
+        string? down = null;
+        if (asked.UnreachableSince is { } away
+            && now - away >= TimeSpan.FromMinutes(settings.BalanceCheckerDownAfterMinutes)
+            && await NewAsync($"balance-check:down:{away.ToUnixTimeMilliseconds()}"))
+        {
+            down = string.Create(
+                CultureInfo.InvariantCulture,
+                $"The balance automation has not answered since {Moment(away)}, so no balance can be checked. Where udaan runs, see that udaan's service is running.\n");
+            first ??= "The balance automation is not answering";
+        }
+
+        var count = needsYou.Count + stillFailing.Count + recovered.Count + quiet.Count + (down is null ? 0 : 1);
+        if (count == 0)
+        {
+            return false;
+        }
+
+        var body = new StringBuilder();
+        Section(body, "Needs you:", needsYou);
+        Section(body, "Still failing:", stillFailing);
+        Section(body, "Working again:", recovered);
+        Section(body, "Not checked:", quiet);
+        body.Append(down is null ? "" : down + "\n");
+        body.Append("Every balance stays as it was last read. The Points screen has the details.\n");
+
+        var subject = count == 1 ? first! : $"Balance checks: {count} things to know";
+        return await SendAsync(new Notification(subject, body.ToString()), keys, cancellationToken);
+    }
+
+    private static string AlertKey(string kind, string account, DateTimeOffset since) =>
+        $"balance-check:{kind}:{account}:{since.ToUnixTimeMilliseconds()}";
+
+    private string Moment(DateTimeOffset instant) =>
+        clock.ToLocal(instant).ToString("MMM d, h:mm tt", CultureInfo.InvariantCulture);
+
+    private static void Section(StringBuilder body, string title, List<string> lines)
+    {
+        if (lines.Count > 0)
+        {
+            body.Append(title).Append('\n').AppendJoin("", lines).Append('\n');
+        }
     }
 
     private async Task<bool> SendBalanceNudgesAsync(CancellationToken cancellationToken)
@@ -150,6 +277,27 @@ public sealed class ReminderService(
         if (review.Count > 0)
         {
             body.Append(CultureInfo.InvariantCulture, $"\n{review.Count} credit(s) are waiting in the review queue.\n");
+        }
+
+        var points = await queries.GetBalancesAsync(cancellationToken);
+        if (points.Checks.Count > 0)
+        {
+            var wrong = points.Checks.Where(check => check.Status != "Ok" || check.Overdue).ToArray();
+            body.Append(
+                CultureInfo.InvariantCulture,
+                $"\nAutomatic balance checks: {(wrong.Length == 0 ? $"all {points.Checks.Count} ok" : $"{wrong.Length} of {points.Checks.Count} need a look")}.\n");
+            foreach (var check in wrong)
+            {
+                var what = check.Status == "Ok"
+                    ? $"nothing heard since {Moment(check.CheckedAt)}"
+                    : $"{CheckHistory.Words(Enum.Parse<Domain.BalanceCheckStatus>(check.Status))} since {Moment(check.FailingSince ?? check.CheckedAt)}";
+                body.Append(CultureInfo.InvariantCulture, $"- {check.Account} ({check.Program}): {what}\n");
+            }
+        }
+
+        if (points.Checker?.UnreachableSince is { } away)
+        {
+            body.Append(CultureInfo.InvariantCulture, $"\nThe balance automation has not answered since {Moment(away)}.\n");
         }
 
         var subject = $"Chitragupta this week: {expiring.Count} to use";

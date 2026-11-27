@@ -30,13 +30,27 @@ namespace Chitragupta.Infrastructure.Persistence.Migrations
                     b.ToTable("AcknowledgedFlags", (string)null);
                 });
 
-            modelBuilder.Entity("Chitragupta.Infrastructure.Persistence.BalanceCheckRow", b =>
+            modelBuilder.Entity("Chitragupta.Infrastructure.Persistence.BalanceAttemptRow", b =>
                 {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Account")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Advice")
                         .HasColumnType("TEXT");
 
                     b.Property<long>("CheckedAt")
                         .HasColumnType("INTEGER");
+
+                    b.Property<double?>("DurationSeconds")
+                        .HasColumnType("REAL");
+
+                    b.Property<string>("ErrorCode")
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Owner")
                         .IsRequired()
@@ -49,13 +63,28 @@ namespace Chitragupta.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("Retryable")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("SignedIn")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.HasKey("Account");
+                    b.Property<string>("ToolVersion")
+                        .HasColumnType("TEXT");
 
-                    b.ToTable("BalanceChecks", (string)null);
+                    b.Property<string>("Trail")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Account", "CheckedAt")
+                        .IsUnique();
+
+                    b.ToTable("BalanceAttempts", (string)null);
                 });
 
             modelBuilder.Entity("Chitragupta.Infrastructure.Persistence.BalanceSnapshotRow", b =>

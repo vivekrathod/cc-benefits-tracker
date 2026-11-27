@@ -5,11 +5,11 @@ using Chitragupta.Domain;
 namespace Chitragupta.Application.Balances;
 
 /// <summary>
-/// Keeps miles and points balances. Readings arrive from outside, pushed by an automation
-/// or typed in: the tracker never signs in to a loyalty program itself. Every reading is
-/// kept, and the newest one is the balance.
+/// Keeps miles and points balances. Readings arrive from an automation's results or are typed
+/// in: the tracker never signs in to a loyalty program itself. Every reading is kept, and the
+/// newest one is the balance. Every attempt is kept too, so a failure has a history.
 /// </summary>
-public sealed class BalanceService(ITrackerStore store, IBalanceReportParser parser, IClock clock)
+public sealed class BalanceService(ITrackerStore store, IBalanceReportParser parser, IClock clock, TrackerSettings settings)
 {
     /// <summary>Takes an automation's output as it was printed. Sending the same output again changes nothing.</summary>
     public async Task<IReadOnlyList<BalanceImportLineDto>> ImportAsync(string report, CancellationToken cancellationToken)
@@ -60,7 +60,7 @@ public sealed class BalanceService(ITrackerStore store, IBalanceReportParser par
     private async Task<BalanceImportLineDto> ImportAsync(
         BalanceReport report, IReadOnlyList<Person> people, CancellationToken cancellationToken)
     {
-        var owner = FindOwner(people, report.Owner);
+        var owner = Owners.Find(people, report.Owner);
         var recorded = false;
 
         if (owner is not null && report.Balance is { } reading)
@@ -77,6 +77,12 @@ public sealed class BalanceService(ITrackerStore store, IBalanceReportParser par
             }
         }
 
+        if (report.Deferred)
+        {
+            // "Not now" is an answer about timing, not about the account. There is nothing to keep.
+            return new BalanceImportLineDto(report.Account, "Wait", recorded, report.Problem);
+        }
+
         // A check that worked for an owner nobody goes by is still a problem, just the tracker's own.
         var unplaced = owner is null && report.Status == BalanceCheckStatus.Ok;
         var check = new BalanceCheck(
@@ -87,38 +93,34 @@ public sealed class BalanceService(ITrackerStore store, IBalanceReportParser par
             unplaced
                 ? $"Nobody in the tracker goes by \"{report.Owner}\". Rename a person on the Manage screen, or change the owner in the automation."
                 : report.Problem,
-            report.CheckedAt ?? clock.Now);
-
-        var checks = await store.GetBalanceChecksAsync(cancellationToken);
-        var last = checks.FirstOrDefault(candidate => candidate.Account == check.Account);
-        if (last is null || check.CheckedAt >= last.CheckedAt)
+            report.CheckedAt ?? clock.Now)
         {
-            await store.SaveBalanceCheckAsync(check, cancellationToken);
-        }
+            ErrorCode = report.ErrorCode,
+            Retryable = report.Retryable,
+            SignedIn = report.SignedIn,
+            Advice = report.Advice,
+            DurationSeconds = report.DurationSeconds,
+            ToolVersion = report.ToolVersion,
+            Trail = report.Trail,
+        };
+        await store.SaveBalanceCheckAsync(check, cancellationToken);
 
         return new BalanceImportLineDto(check.Account, check.Status.ToString(), recorded, check.Problem);
     }
 
+    /// <summary>Removes attempts older than the history that is kept. The newest attempt of every account stays.</summary>
+    public Task<int> TrimHistoryAsync(CancellationToken cancellationToken) =>
+        store.DeleteBalanceAttemptsBeforeAsync(clock.Now.AddDays(-settings.BalanceHistoryDays), cancellationToken);
+
+    /// <summary>Forgets an account's checks, for one the automation no longer has. Its balances stay.</summary>
+    public async Task ForgetChecksAsync(string account, CancellationToken cancellationToken)
+    {
+        if (await store.DeleteBalanceChecksAsync(account, cancellationToken) == 0)
+        {
+            throw new NotFoundException("The account");
+        }
+    }
+
     private async Task<ProgramBalance?> FindAsync(Guid personId, string program, CancellationToken cancellationToken) =>
         (await store.GetLatestBalancesAsync(cancellationToken)).FirstOrDefault(balance => balance.IsFor(personId, program));
-
-    /// <summary>
-    /// An automation names an owner in its own words. That is a person's whole name or,
-    /// while only one person has it, their first name. Anything else waits for a person
-    /// to sort out: a result never creates somebody.
-    /// </summary>
-    private static Person? FindOwner(IReadOnlyList<Person> people, string owner)
-    {
-        var name = owner.Trim();
-        var whole = people.Where(person => person.Name.Equals(name, StringComparison.OrdinalIgnoreCase)).ToArray();
-        if (whole.Length == 1)
-        {
-            return whole[0];
-        }
-
-        var first = people
-            .Where(person => person.Name.Split(' ', 2)[0].Equals(name, StringComparison.OrdinalIgnoreCase))
-            .ToArray();
-        return first.Length == 1 ? first[0] : null;
-    }
 }

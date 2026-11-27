@@ -53,6 +53,22 @@ internal static class Format
         _ => "failed",
     };
 
+    public static string TimeOfDay(TimeOnly time) => time.ToString("h:mm tt", CultureInfo.InvariantCulture);
+
+    /// <summary>One past attempt, for the hint on its mark.</summary>
+    public static string Attempt(Chitragupta.Contracts.BalanceAttemptDto attempt) =>
+        CheckStatus(attempt.Status)
+        + (attempt.ErrorCode is null ? "" : $" ({attempt.ErrorCode.Replace('_', ' ')})")
+        + (attempt.SignedIn ? "" : ", no sign-in tried");
+
+    /// <summary>Why a reading is old, in the few words a chip has room for.</summary>
+    public static string Stale(string why) => why switch
+    {
+        "Overdue" => "not checked",
+        "NotChecked" => "nothing checks it",
+        _ => CheckStatus(why),
+    };
+
     public static string Month(int month) => CultureInfo.InvariantCulture.DateTimeFormat.GetAbbreviatedMonthName(month);
 
     /// <summary>What the API said, or a plain line when the server could not be reached at all.</summary>

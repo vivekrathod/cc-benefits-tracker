@@ -173,4 +173,46 @@ public class StoreTests : IAsyncLifetime
 
         await Assert.ThrowsAsync<ArgumentException>(() => backup.CopyNowAsync("../outside", Ct));
     }
+
+    [Fact]
+    public async Task Attempts_at_a_balance_check_are_all_kept_and_the_newest_is_the_account_now()
+    {
+        var at = new DateTimeOffset(2026, 11, 25, 17, 30, 0, TimeSpan.Zero);
+        await Store.SaveBalanceCheckAsync(new BalanceCheck("alex-aa", "alex", "American AAdvantage", BalanceCheckStatus.Ok, null, at), Ct);
+        var failed = new BalanceCheck("alex-aa", "alex", "American AAdvantage", BalanceCheckStatus.Failed, "no code arrived", at.AddDays(1))
+        {
+            ErrorCode = "otp_timeout",
+            Retryable = true,
+            SignedIn = false,
+            Advice = "It is tried again later.",
+            DurationSeconds = 48.2,
+            ToolVersion = "0.3.0",
+            Trail = """[{"step":"page state"}]""",
+        };
+        await Store.SaveBalanceCheckAsync(failed, Ct);
+        await Store.SaveBalanceCheckAsync(new BalanceCheck("alex-united", "alex", "United MileagePlus", BalanceCheckStatus.Ok, null, at), Ct);
+
+        // The same account at the same moment is the same attempt, told again.
+        await Store.SaveBalanceCheckAsync(failed with { Problem = "no code arrived in time" }, Ct);
+
+        var history = await Store.GetBalanceAttemptsAsync(at.AddHours(1), Ct);
+        Assert.Equal([failed with { Problem = "no code arrived in time" }], history);
+        Assert.Equal(3, (await Store.GetBalanceAttemptsAsync(DateTimeOffset.MinValue, Ct)).Count);
+        Assert.Equal(
+            [("alex-aa", BalanceCheckStatus.Failed), ("alex-united", BalanceCheckStatus.Ok)],
+            (await Store.GetBalanceChecksAsync(Ct)).OrderBy(check => check.Account).Select(check => (check.Account, check.Status)));
+
+        Assert.Equal(2, await Store.DeleteBalanceChecksAsync("alex-aa", Ct));
+        Assert.Equal("alex-united", (await Store.GetBalanceChecksAsync(Ct)).Single().Account);
+    }
+
+    [Fact]
+    public async Task A_reminder_that_went_out_can_be_asked_about()
+    {
+        Assert.False(await Store.HasReminderAsync("balance-check:needs-you:alex-aa:1", Ct));
+
+        await Store.TryRecordReminderAsync("balance-check:needs-you:alex-aa:1", DateTimeOffset.UnixEpoch, Ct);
+
+        Assert.True(await Store.HasReminderAsync("balance-check:needs-you:alex-aa:1", Ct));
+    }
 }

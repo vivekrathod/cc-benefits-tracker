@@ -1,3 +1,4 @@
+using Chitragupta.Application.Balances;
 using Chitragupta.Application.Matching;
 using Chitragupta.Application.Ports;
 using Chitragupta.Application.Reminders;
@@ -9,7 +10,7 @@ namespace Chitragupta.Api;
 
 /// <summary>
 /// The background job. It wakes every few minutes and does whatever has come due:
-/// the catalog refresh, the daily sync, rolling the periods forward, reminders, and the nightly backup.
+/// the catalog refresh, the daily sync, rolling the periods forward, reminders, trimming old history, and the nightly backup.
 /// Each step decides for itself whether it is due, so a restart never repeats or skips one.
 /// </summary>
 internal sealed class DailyWorker(
@@ -18,6 +19,7 @@ internal sealed class DailyWorker(
     SyncService sync,
     Rematcher rematcher,
     ReminderService reminders,
+    BalanceService balances,
     DatabaseBackup backup,
     IClock clock,
     ILogger<DailyWorker> logger) : BackgroundService
@@ -25,6 +27,7 @@ internal sealed class DailyWorker(
     private static readonly TimeSpan Interval = TimeSpan.FromMinutes(10);
 
     private DateOnly? _periodsRolledOn;
+    private DateOnly? _historyTrimmedOn;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -35,6 +38,7 @@ internal sealed class DailyWorker(
             await StepAsync("sync", SyncAsync, stoppingToken);
             await StepAsync("periods", RollPeriodsAsync, stoppingToken);
             await StepAsync("reminders", token => reminders.RunAsync(token), stoppingToken);
+            await StepAsync("history", TrimHistoryAsync, stoppingToken);
             await StepAsync("backup", token => backup.RunIfDueAsync(token), stoppingToken);
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));
@@ -86,6 +90,22 @@ internal sealed class DailyWorker(
 
         await rematcher.RematchAllAsync(cancellationToken);
         _periodsRolledOn = today;
+    }
+
+    private async Task TrimHistoryAsync(CancellationToken cancellationToken)
+    {
+        var today = clock.Today;
+        if (_historyTrimmedOn == today)
+        {
+            return;
+        }
+
+        var removed = await balances.TrimHistoryAsync(cancellationToken);
+        _historyTrimmedOn = today;
+        if (removed > 0)
+        {
+            logger.LogInformation("Removed {Count} balance check attempts older than the history that is kept.", removed);
+        }
     }
 
     private async Task StepAsync(string name, Func<CancellationToken, Task> step, CancellationToken stoppingToken)

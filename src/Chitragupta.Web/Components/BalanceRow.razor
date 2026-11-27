@@ -1,4 +1,4 @@
-@* One person's miles or points in one program: the number, how old the reading is, and when it lapses. *@
+@* One person's miles or points in one program: the number, how old the reading is and whether that is too old, and when it lapses. *@
 <div class="period">
     <div class="row">
         <div>
@@ -13,6 +13,10 @@
     <div class="row">
         <div class="muted">
             @(Balance.Source == "Manual" ? "typed in" : "read") @Format.Age(Balance.AgeDays)
+            @if (Balance.Stale is { } why)
+            {
+                <span class="chip soon" title="The automatic check has not renewed this reading. The number is the last one read.">stale: @Format.Stale(why)</span>
+            }
         </div>
         @if (Balance.DaysUntilExpiry is { } days)
         {

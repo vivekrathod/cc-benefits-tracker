@@ -193,6 +193,36 @@ public sealed class TrackerApiTests : IDisposable
     }
 
     [Fact]
+    public async Task A_failed_check_arrives_with_what_to_do_and_can_be_forgotten_and_nothing_can_be_asked_without_the_automation()
+    {
+        await PostAsync<PersonDto>("/api/people", new AddPersonRequest("Alex"));
+        var result = $$"""
+            { "account": "alex-aa", "program": "aa", "owner": "alex", "udaan_version": "0.3.0", "ok": false, "status": "needs_user",
+              "error": "the sign-in form came back; not retrying", "error_code": "login_rejected", "retryable": false,
+              "checked_at": "{{DateTimeOffset.UtcNow.AddMinutes(-5):yyyy-MM-ddTHH:mm:ss}}+00:00", "decisions": [], "last_good": null }
+            """;
+        var posted = await _client.PostAsync("/api/balances/udaan", new StringContent(result, Encoding.UTF8, "application/json"), Ct);
+        Assert.Equal(HttpStatusCode.OK, posted.StatusCode);
+
+        var view = await GetAsync<BalancesDto>("/api/balances");
+        var check = Assert.Single(view.Checks);
+        Assert.Equal(("NeedsUser", "login_rejected", 1, false), (check.Status, check.ErrorCode, check.SignInsToday, check.CanCheckNow));
+        Assert.Contains("udaan set-login alex-aa", check.Advice);
+        Assert.Equal("NeedsUser", Assert.Single(check.Recent).Status);
+        Assert.Equal(1, (await GetAsync<SummaryDto>("/api/summary")).BalanceProblems);
+
+        // No automation is connected here, as on an install that only has results pushed in.
+        Assert.Null(view.Checker);
+        var asked = await _client.PostAsync("/api/balances/checks/alex-aa", null, Ct);
+        Assert.Equal(HttpStatusCode.BadRequest, asked.StatusCode);
+        Assert.Contains("No balance automation is connected", await DetailAsync(asked));
+
+        Assert.Equal(HttpStatusCode.NoContent, (await _client.DeleteAsync("/api/balances/checks/alex-aa", Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await _client.DeleteAsync("/api/balances/checks/alex-aa", Ct)).StatusCode);
+        Assert.Equal(0, (await GetAsync<SummaryDto>("/api/summary")).BalanceProblems);
+    }
+
+    [Fact]
     public async Task The_web_app_is_served_for_any_page_address()
     {
         foreach (var path in new[] { "/", "/review", "/points" })

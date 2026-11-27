@@ -9,6 +9,7 @@ builder.WebHost.UseStaticWebAssets();
 
 builder.Services.AddTracker(builder.Configuration);
 builder.Services.AddHostedService<DailyWorker>();
+builder.Services.AddHostedService<BalanceCheckWorker>();
 builder.Services.AddHealthChecks();
 builder.Services.AddProblemDetails();
 

@@ -90,9 +90,10 @@ public class BalanceTests
         Assert.Equal([new BalanceImportLineDto("alex-aa", "NeedsUser", false, "the sign-in form came back; not retrying")], failed);
         var view = await tracker.Queries.GetBalancesAsync(Ct);
         Assert.Equal((45_210L, 2), (view.Balances.Single().Amount, view.Balances.Single().AgeDays));
+        var check = Assert.Single(view.Checks);
         Assert.Equal(
-            [new BalanceCheckDto("alex-aa", "alex", Aadvantage, "NeedsUser", "the sign-in form came back; not retrying", DateTimeOffset.Parse("2026-11-26T09:00:00-05:00"))],
-            view.Checks);
+            ("alex-aa", "alex", Aadvantage, "NeedsUser", "the sign-in form came back; not retrying", DateTimeOffset.Parse("2026-11-26T09:00:00-05:00")),
+            (check.Account, check.Owner, check.Program, check.Status, check.Problem, check.CheckedAt));
         Assert.Equal(1, (await tracker.Queries.GetSummaryAsync(tracker.Feed.Name, Ct)).BalanceProblems);
 
         await tracker.Balances.ImportAsync(Udaan.Ok("alex-aa", "aa", "alex", 45_900, "2026-11-27T14:00:00+00:00"), Ct);
@@ -237,5 +238,101 @@ public class BalanceTests
             [("Avios", (int?)8, true), ("Flying Blue", 66, true), ("Empty", null, false)],
             balances.Select(balance => (balance.Program, balance.DaysUntilExpiry, balance.ExpiresSoon)));
         Assert.Equal(1, (await tracker.Queries.GetSummaryAsync(tracker.Feed.Name, Ct)).ExpiringSoon);
+    }
+
+    [Fact]
+    public async Task Every_attempt_is_kept_and_the_newest_says_how_the_account_is_doing()
+    {
+        await using var tracker = await Tracker.StartAsync("2026-11-27 10:00");
+        await tracker.PersonAsync("Alex");
+        await tracker.Balances.ImportAsync(Udaan.Ok("alex-aa", "aa", "alex", 45_210, "2026-11-24T17:30:00+00:00"), Ct);
+        await tracker.Balances.ImportAsync(
+            Udaan.Failed("alex-aa", "aa", "alex", "failed", "no code arrived", "2026-11-25T17:30:00+00:00", code: "otp_timeout", retryable: true), Ct);
+        await tracker.Balances.ImportAsync(
+            Udaan.Failed("alex-aa", "aa", "alex", "needs_user", "the sign-in form came back", "2026-11-26T17:30:00+00:00", code: "login_rejected"), Ct);
+
+        // A result that arrives late takes its own place in the history and changes nothing about now.
+        await tracker.Balances.ImportAsync(Udaan.Ok("alex-aa", "aa", "alex", 45_000, "2026-11-23T17:30:00+00:00"), Ct);
+
+        var check = Assert.Single((await tracker.Queries.GetBalancesAsync(Ct)).Checks);
+        Assert.Equal(("NeedsUser", "login_rejected", false), (check.Status, check.ErrorCode, check.RetriesItself));
+        Assert.Contains("udaan set-login alex-aa", check.Advice);
+        Assert.Equal(DateTimeOffset.Parse("2026-11-25T12:30:00-05:00"), check.FailingSince);
+        Assert.Equal(
+            [("Ok", null), ("Ok", null), ("Failed", "otp_timeout"), ("NeedsUser", "login_rejected")],
+            check.Recent.Select(attempt => (attempt.Status, attempt.ErrorCode)));
+    }
+
+    [Fact]
+    public async Task A_reading_the_automation_has_not_renewed_for_two_days_is_marked_stale_with_the_reason()
+    {
+        await using var tracker = await Tracker.StartAsync("2026-11-26 10:00");
+        var alex = await tracker.PersonAsync("Alex");
+        await tracker.Balances.ImportAsync(Udaan.Ok("alex-aa", "aa", "alex", 45_210, "2026-11-25T17:30:00+00:00"), Ct);
+        await tracker.Balances.ImportAsync(Udaan.Ok("alex-united", "united", "alex", 7_000, "2026-11-25T17:45:00+00:00"), Ct);
+        await tracker.Balances.RecordAsync(new RecordBalanceRequest(alex.Id, "Avios", 100, null), Ct);
+
+        // Yesterday's readings are as fresh as a daily check makes them.
+        Assert.All((await tracker.Queries.GetBalancesAsync(Ct)).Balances, balance => Assert.Null(balance.Stale));
+
+        await tracker.Balances.ImportAsync(
+            Udaan.Failed("alex-aa", "aa", "alex", "blocked", "site challenge", "2026-11-26T17:30:00+00:00", code: "bot_wall"), Ct);
+        tracker.Clock.Set("2026-11-27 13:00");
+
+        var view = await tracker.Queries.GetBalancesAsync(Ct);
+        Assert.Equal(
+            [("American AAdvantage", "Blocked"), ("Avios", null), ("United MileagePlus", "Overdue")],
+            view.Balances.Select(balance => (balance.Program, balance.Stale)));
+        // The failing check and the one that went quiet both want a look.
+        Assert.Equal([("alex-aa", false), ("alex-united", true)], view.Checks.Select(check => (check.Account, check.Overdue)));
+        Assert.Equal(2, (await tracker.Queries.GetSummaryAsync(tracker.Feed.Name, Ct)).BalanceProblems);
+
+        // An account the automation no longer has can be forgotten. Its reading stays, marked as nobody's to renew.
+        await tracker.Balances.ForgetChecksAsync("alex-united", Ct);
+        view = await tracker.Queries.GetBalancesAsync(Ct);
+        Assert.Equal("NotChecked", view.Balances.Single(balance => balance.Program == "United MileagePlus").Stale);
+        Assert.Equal("alex-aa", view.Checks.Single().Account);
+        Assert.Equal(2, (await tracker.Queries.GetSummaryAsync(tracker.Feed.Name, Ct)).BalanceProblems);
+        await Assert.ThrowsAsync<NotFoundException>(() => tracker.Balances.ForgetChecksAsync("alex-united", Ct));
+    }
+
+    [Fact]
+    public async Task A_refusal_is_kept_as_an_attempt_that_was_no_sign_in_and_a_not_now_answer_is_not_kept()
+    {
+        await using var tracker = await Tracker.StartAsync("2026-11-27 13:00");
+        await tracker.PersonAsync("Alex");
+
+        var lines = await tracker.Balances.ImportAsync(
+            Udaan.All(
+                Udaan.Failed("alex-aa", "aa", "alex", "needs_user", "live checks held since a rejected login", null, code: "login_rejected", attempted: false),
+                Udaan.Failed("alex-united", "united", "alex", "wait", "another sign-in ended too recently", null, attempted: false)),
+            Ct);
+
+        Assert.Equal([("alex-aa", "NeedsUser"), ("alex-united", "Wait")], lines.Select(line => (line.Account, line.Status)));
+        var check = Assert.Single((await tracker.Queries.GetBalancesAsync(Ct)).Checks);
+        Assert.Equal(("alex-aa", 0, false), (check.Account, check.SignInsToday, check.Recent.Single().SignedIn));
+        // No time came with the refusal, so it is kept at the moment it arrived.
+        Assert.Equal(tracker.Clock.Now, check.CheckedAt);
+    }
+
+    [Fact]
+    public async Task Old_attempts_are_trimmed_and_the_newest_of_an_account_always_stays()
+    {
+        await using var tracker = await Tracker.StartAsync("2026-11-27 10:00");
+        await tracker.PersonAsync("Alex");
+        await tracker.Balances.ImportAsync(Udaan.Ok("alex-aa", "aa", "alex", 1, "2026-06-01T17:30:00+00:00"), Ct);
+        await tracker.Balances.ImportAsync(Udaan.Ok("alex-aa", "aa", "alex", 2, "2026-06-02T17:30:00+00:00"), Ct);
+        await tracker.Balances.ImportAsync(Udaan.Ok("alex-aa", "aa", "alex", 3, "2026-11-26T17:30:00+00:00"), Ct);
+        await tracker.Balances.ImportAsync(Udaan.Ok("alex-united", "united", "alex", 4, "2026-06-01T17:30:00+00:00"), Ct);
+        await tracker.Balances.ImportAsync(Udaan.Ok("alex-united", "united", "alex", 5, "2026-06-02T17:30:00+00:00"), Ct);
+
+        Assert.Equal(3, await tracker.Balances.TrimHistoryAsync(Ct));
+
+        var kept = await tracker.Store.GetBalanceAttemptsAsync(DateTimeOffset.MinValue, Ct);
+        Assert.Equal(
+            [("alex-united", "2026-06-02"), ("alex-aa", "2026-11-26")],
+            kept.Select(attempt => (attempt.Account, attempt.CheckedAt.ToString("yyyy-MM-dd"))));
+        // A quiet account is still listed, by the one attempt that is left of it.
+        Assert.Equal(2, (await tracker.Queries.GetBalancesAsync(Ct)).Checks.Count);
     }
 }

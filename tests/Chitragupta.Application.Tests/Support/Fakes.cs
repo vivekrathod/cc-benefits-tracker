@@ -59,6 +59,33 @@ internal sealed class FakeFeed : ITransactionFeed
         new(id, null, DateOnly.Parse(transactedOn), Money.FromDollars(amount), description, true, "{}");
 }
 
+/// <summary>The balance automation as a test sets it up: which accounts it has, and what it answers when asked.</summary>
+internal sealed class FakeChecker : IBalanceChecker
+{
+    public bool IsConfigured { get; set; }
+
+    public List<string> Accounts { get; } = [];
+
+    /// <summary>Set to make the automation not answer at all.</summary>
+    public string? Outage { get; set; }
+
+    public List<(string Account, TimeSpan MaxAge)> Asked { get; } = [];
+
+    public Func<string, BalanceCheckAnswer> Answer { get; set; } = _ => throw new InvalidOperationException("The test set up no answer.");
+
+    /// <summary>Accounts are named "owner-program", as udaan names them.</summary>
+    public Task<IReadOnlyList<CheckerAccount>> GetAccountsAsync(CancellationToken cancellationToken) =>
+        Outage is null
+            ? Task.FromResult<IReadOnlyList<CheckerAccount>>(Accounts.Select(name => new CheckerAccount(name, name.Split('-')[^1])).ToArray())
+            : throw new BalanceCheckerUnavailableException(Outage);
+
+    public Task<BalanceCheckAnswer> CheckAsync(string account, TimeSpan maxAge, CancellationToken cancellationToken)
+    {
+        Asked.Add((account, maxAge));
+        return Task.FromResult(Answer(account));
+    }
+}
+
 internal sealed class RecordingNotifier : INotifier
 {
     public List<Notification> Sent { get; } = [];

@@ -90,9 +90,8 @@ public class ReminderTests
     {
         // 103 days before the miles lapse on March 1.
         await using var tracker = await Tracker.StartAsync("2026-11-18 10:00");
-        await tracker.PersonAsync();
-        await tracker.Balances.ImportAsync(
-            Udaan.Ok("alex-aa", "aa", "alex", 45_210, "2026-11-18T12:00:00+00:00", expires: "2027-03-01"), Ct);
+        var alex = await tracker.PersonAsync();
+        await tracker.Balances.RecordAsync(new RecordBalanceRequest(alex.Id, "American AAdvantage", 45_210, DateOnly.Parse("2027-03-01")), Ct);
 
         Assert.Equal(0, await tracker.Reminders.RunAsync(Ct));
 
@@ -155,5 +154,161 @@ public class ReminderTests
         Assert.Contains("Miles and points that lapse in the next 90 days:", digest.Body);
         Assert.Contains("- Avios (Alex): 9,000 expire Jan 15, 2027 (68 days)", digest.Body);
         Assert.DoesNotContain("Flying Blue", digest.Body);
+    }
+
+    [Fact]
+    public async Task A_check_only_a_person_can_fix_is_said_once_again_after_two_days_and_once_more_when_it_works()
+    {
+        await using var tracker = await Tracker.StartAsync("2026-11-24 13:00");
+        await tracker.PersonAsync();
+        await tracker.Balances.ImportAsync(Udaan.Ok("alex-aa", "aa", "alex", 45_210, "2026-11-24T17:30:00+00:00"), Ct);
+        Assert.Equal(0, await tracker.Reminders.RunAsync(Ct));
+
+        tracker.Clock.Set("2026-11-25 13:00");
+        await tracker.Balances.ImportAsync(
+            Udaan.Failed("alex-aa", "aa", "alex", "needs_user", "the sign-in form came back", "2026-11-25T17:30:00+00:00", code: "login_rejected"), Ct);
+        Assert.Equal(1, await tracker.Reminders.RunAsync(Ct));
+        Assert.Equal(0, await tracker.Reminders.RunAsync(Ct));
+
+        var alert = tracker.Notifier.Sent.Single();
+        Assert.Equal("Balance check needs you: alex-aa (American AAdvantage)", alert.Subject);
+        Assert.Contains("Needs you:\n- alex-aa (American AAdvantage): needs you since Nov 25, 12:30 PM. the sign-in form came back", alert.Body);
+        Assert.Contains("What to do: The site refused the stored login", alert.Body);
+        Assert.Contains("Every balance stays as it was last read.", alert.Body);
+
+        // The next day the automation holds the account and says so again. That is the same failure, not news.
+        tracker.Clock.Set("2026-11-26 13:00");
+        await tracker.Balances.ImportAsync(
+            Udaan.Failed("alex-aa", "aa", "alex", "needs_user", "live checks held", null, code: "login_rejected", attempted: false), Ct);
+        Assert.Equal(0, await tracker.Reminders.RunAsync(Ct));
+
+        tracker.Clock.Set("2026-11-27 13:00");
+        Assert.Equal(1, await tracker.Reminders.RunAsync(Ct));
+        Assert.Equal(0, await tracker.Reminders.RunAsync(Ct));
+        Assert.Equal("Balance check still failing: alex-aa (American AAdvantage)", tracker.Notifier.Sent[1].Subject);
+
+        tracker.Clock.Set("2026-11-28 13:00");
+        await tracker.Balances.ImportAsync(Udaan.Ok("alex-aa", "aa", "alex", 45_900, "2026-11-28T17:30:00+00:00"), Ct);
+        Assert.Equal(1, await tracker.Reminders.RunAsync(Ct));
+        Assert.Equal(0, await tracker.Reminders.RunAsync(Ct));
+        Assert.Equal("Balance check works again: alex-aa (American AAdvantage)", tracker.Notifier.Sent[2].Subject);
+        Assert.Contains("read again Nov 28, 12:30 PM", tracker.Notifier.Sent[2].Body);
+    }
+
+    [Theory]
+    [InlineData("failed", "otp_timeout", true)]
+    [InlineData("blocked", "bot_wall", false)]
+    public async Task A_failure_that_clears_by_itself_is_only_said_once_it_has_lasted_two_days(string status, string code, bool retryable)
+    {
+        await using var tracker = await Tracker.StartAsync("2026-11-24 13:00");
+        await tracker.PersonAsync();
+        await tracker.Balances.ImportAsync(
+            Udaan.Failed("alex-aa", "aa", "alex", status, "not this time", "2026-11-24T17:30:00+00:00", code: code, retryable: retryable), Ct);
+        Assert.Equal(0, await tracker.Reminders.RunAsync(Ct));
+
+        // It works the next day. Nobody was told it failed, so nobody is told it works.
+        tracker.Clock.Set("2026-11-25 13:00");
+        await tracker.Balances.ImportAsync(Udaan.Ok("alex-aa", "aa", "alex", 45_210, "2026-11-25T17:30:00+00:00"), Ct);
+        Assert.Equal(0, await tracker.Reminders.RunAsync(Ct));
+
+        foreach (var day in new[] { "26", "27", "28" })
+        {
+            tracker.Clock.Set($"2026-11-{day} 13:00");
+            await tracker.Balances.ImportAsync(
+                Udaan.Failed("alex-aa", "aa", "alex", status, "not this time", $"2026-11-{day}T17:30:00+00:00", code: code, retryable: retryable), Ct);
+        }
+
+        Assert.Equal(1, await tracker.Reminders.RunAsync(Ct));
+        Assert.Equal(0, await tracker.Reminders.RunAsync(Ct));
+        Assert.Contains("Still failing:\n- alex-aa (American AAdvantage)", tracker.Notifier.Sent.Single().Body);
+    }
+
+    [Fact]
+    public async Task An_account_nothing_was_heard_about_for_over_a_day_is_said_once()
+    {
+        await using var tracker = await Tracker.StartAsync("2026-11-25 13:00");
+        await tracker.PersonAsync();
+        await tracker.Balances.ImportAsync(
+            Udaan.All(
+                Udaan.Ok("alex-aa", "aa", "alex", 45_210, "2026-11-25T17:30:00+00:00"),
+                Udaan.Ok("alex-united", "united", "alex", 7_000, "2026-11-25T17:45:00+00:00")),
+            Ct);
+
+        tracker.Clock.Set("2026-11-26 14:00");
+        Assert.Equal(0, await tracker.Reminders.RunAsync(Ct));
+
+        tracker.Clock.Set("2026-11-26 15:00");
+        Assert.Equal(1, await tracker.Reminders.RunAsync(Ct));
+        tracker.Clock.Set("2026-11-27 15:00");
+        Assert.Equal(0, await tracker.Reminders.RunAsync(Ct));
+
+        var alert = tracker.Notifier.Sent.Single();
+        Assert.Equal("Balance checks: 2 things to know", alert.Subject);
+        Assert.Contains("Not checked:\n- alex-aa (American AAdvantage): nothing heard since Nov 25, 12:30 PM.", alert.Body);
+    }
+
+    [Fact]
+    public async Task An_automation_that_stops_answering_is_said_once_after_half_an_hour_and_its_quiet_accounts_are_not_listed_too()
+    {
+        await using var tracker = await Tracker.StartAsync("2026-11-25 13:00");
+        await tracker.PersonAsync();
+        tracker.Checker.IsConfigured = true;
+        tracker.Checker.Accounts.Add("alex-aa");
+        await tracker.Balances.ImportAsync(Udaan.Ok("alex-aa", "aa", "alex", 45_210, "2026-11-25T17:30:00+00:00"), Ct);
+        tracker.Checker.Outage = "udaan's service did not answer.";
+
+        tracker.Clock.Set("2026-11-26 12:30");
+        await tracker.Runner.RunDueAsync(Ct);
+        tracker.Clock.Set("2026-11-26 12:50");
+        Assert.Equal(0, await tracker.Reminders.RunAsync(Ct));
+
+        tracker.Clock.Set("2026-11-26 13:00");
+        Assert.Equal(1, await tracker.Reminders.RunAsync(Ct));
+        // By the evening the account is overdue as well, for the reason already given.
+        tracker.Clock.Set("2026-11-26 20:00");
+        Assert.Equal(0, await tracker.Reminders.RunAsync(Ct));
+
+        var alert = tracker.Notifier.Sent.Single();
+        Assert.Equal("The balance automation is not answering", alert.Subject);
+        Assert.Contains("has not answered since Nov 26, 12:30 PM", alert.Body);
+
+        // It comes back and catches up, and the account is never reported as quiet.
+        tracker.Checker.Outage = null;
+        tracker.Checker.Answer = account => Application.Ports.BalanceCheckAnswer.ComeBackAt(tracker.Clock.Now.AddMinutes(15));
+        await tracker.Runner.RunDueAsync(Ct);
+        Assert.Equal(0, await tracker.Reminders.RunAsync(Ct));
+    }
+
+    [Fact]
+    public async Task An_alert_that_could_not_be_sent_goes_out_on_the_next_run()
+    {
+        await using var tracker = await Tracker.StartAsync("2026-11-25 13:00");
+        await tracker.PersonAsync();
+        await tracker.Balances.ImportAsync(
+            Udaan.Failed("alex-aa", "aa", "alex", "needs_user", "the sign-in form came back", "2026-11-25T17:30:00+00:00", code: "login_rejected"), Ct);
+
+        tracker.Notifier.Broken = true;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tracker.Reminders.RunAsync(Ct));
+        tracker.Notifier.Broken = false;
+
+        Assert.Equal(1, await tracker.Reminders.RunAsync(Ct));
+    }
+
+    [Fact]
+    public async Task The_digest_says_how_the_automatic_checks_are_doing()
+    {
+        // Sunday morning.
+        await using var tracker = await Tracker.StartAsync("2026-11-29 09:30");
+        await tracker.PersonAsync();
+        await tracker.Balances.ImportAsync(
+            Udaan.All(
+                Udaan.Ok("alex-united", "united", "alex", 7_000, "2026-11-29T13:00:00+00:00"),
+                Udaan.Failed("alex-aa", "aa", "alex", "blocked", "site challenge", "2026-11-29T13:10:00+00:00", code: "bot_wall")),
+            Ct);
+
+        await tracker.Reminders.RunAsync(Ct);
+
+        var digest = tracker.Notifier.Sent.Single(sent => sent.Subject.StartsWith("Chitragupta this week", StringComparison.Ordinal));
+        Assert.Contains("Automatic balance checks: 1 of 2 need a look.\n- alex-aa (American AAdvantage): blocked by the site since Nov 29, 8:10 AM", digest.Body);
     }
 }

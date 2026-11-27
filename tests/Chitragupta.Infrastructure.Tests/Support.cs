@@ -38,3 +38,18 @@ internal sealed class TempFolder : IDisposable
         }
     }
 }
+
+/// <summary>Answers HTTP requests the way a test says, and remembers what was asked.</summary>
+internal sealed class StubHttp(Func<HttpRequestMessage, string, HttpResponseMessage> respond) : HttpMessageHandler
+{
+    public List<(HttpMethod Method, Uri Url, string? Authorization, string Body)> Requests { get; } = [];
+
+    public HttpClient Client() => new(this, disposeHandler: false);
+
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken);
+        Requests.Add((request.Method, request.RequestUri!, request.Headers.Authorization?.ToString(), body));
+        return respond(request, body);
+    }
+}

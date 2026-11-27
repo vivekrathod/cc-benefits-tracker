@@ -159,7 +159,18 @@ internal static class TrackerApi
             await balances.RemoveAsync(personId, program, ct);
             return Results.NoContent();
         });
-        api.MapPost("/balances/udaan", async (HttpRequest request, BalanceService balances, CancellationToken ct) =>
+        api.MapPost("/balances/checks/{account}", async (string account, BalanceCheckRunner runner, CancellationToken ct) =>
+        {
+            // "Check now". It joins the line and runs within a minute or so, when the automation allows it.
+            await runner.RequestAsync(account, ct);
+            return Results.Accepted();
+        });
+        api.MapDelete("/balances/checks/{account}", async (string account, BalanceService balances, CancellationToken ct) =>
+        {
+            await balances.ForgetChecksAsync(account, ct);
+            return Results.NoContent();
+        });
+        api.MapPost("/balances/udaan", async (HttpRequest request, BalanceService balances, ILoggerFactory logs, CancellationToken ct) =>
         {
             // The body is what "udaan check" printed, as it is. One address serves every account:
             // each result says whose it is.
@@ -169,7 +180,11 @@ internal static class TrackerApi
             }
 
             using var reader = new StreamReader(request.Body);
-            return Results.Ok(await balances.ImportAsync(await reader.ReadToEndAsync(ct), ct));
+            var lines = await balances.ImportAsync(await reader.ReadToEndAsync(ct), ct);
+            logs.CreateLogger("Chitragupta.Api.Balances").LogInformation(
+                "Balance results pushed in: {Count} accounts, {Ok} ok, {Kept} readings kept.",
+                lines.Count, lines.Count(line => line.Status == "Ok"), lines.Count(line => line.Recorded));
+            return Results.Ok(lines);
         });
 
         // Sync

@@ -32,7 +32,11 @@ public class UdaanBalanceParserTests
         Assert.Equal(
             new BalanceReport(
                 "alex-aa", "alex", "American AAdvantage", BalanceCheckStatus.Ok, null, at,
-                new ReportedBalance(45_210, DateOnly.Parse("2028-03-14"), at)),
+                new ReportedBalance(45_210, DateOnly.Parse("2028-03-14"), at))
+            {
+                DurationSeconds = 31.7,
+                Trail = """[ { "step": "page state", "method": "jev", "choice": "signed_in", "confidence": 1 } ]""",
+            },
             report);
     }
 
@@ -145,5 +149,50 @@ public class UdaanBalanceParserTests
         var refused = Assert.Throws<RequestRejectedException>(() => _parser.Parse(text));
 
         Assert.Contains(reason, refused.Message);
+    }
+
+    [Fact]
+    public void A_failure_keeps_its_code_whether_trying_again_can_help_and_what_to_do()
+    {
+        var report = Assert.Single(_parser.Parse("""
+            { "account": "alex-aa", "program": "aa", "owner": "alex", "udaan_version": "0.3.0", "ok": false,
+              "status": "needs_user", "error": "the sign-in form came back; not retrying",
+              "error_code": "login_rejected", "retryable": false, "source": "live",
+              "checked_at": "2026-11-27T16:52:38+00:00", "decisions": [], "duration_s": 48.2, "last_good": null }
+            """));
+
+        Assert.Equal(
+            (BalanceCheckStatus.NeedsUser, "login_rejected", false, true, false, 48.2, "0.3.0", null),
+            (report.Status, report.ErrorCode, report.Retryable, report.SignedIn, report.Deferred, report.DurationSeconds, report.ToolVersion, report.Trail));
+        Assert.Contains("udaan set-login alex-aa", report.Advice);
+    }
+
+    [Fact]
+    public void A_failure_that_clears_by_itself_says_so()
+    {
+        var report = Assert.Single(_parser.Parse("""
+            { "account": "alex-aa", "program": "aa", "owner": "alex", "ok": false, "status": "failed",
+              "error": "no code arrived", "error_code": "otp_timeout", "retryable": true,
+              "checked_at": "2026-11-27T16:52:38+00:00" }
+            """));
+
+        Assert.Equal((BalanceCheckStatus.Failed, true), (report.Status, report.Retryable));
+        Assert.Contains("tried again later", report.Advice);
+    }
+
+    [Fact]
+    public void A_refusal_is_known_as_one_because_no_sign_in_happened()
+    {
+        var reports = _parser.Parse("""
+            { "results": [
+              { "account": "alex-aa", "program": "aa", "owner": "alex", "ok": false, "status": "needs_user", "attempted": false,
+                "error_code": "login_rejected", "retryable": false, "held": true, "error": "live checks held since a rejected login", "last_good": null },
+              { "account": "alex-united", "program": "united", "owner": "alex", "ok": false, "status": "wait", "attempted": false,
+                "error": "another live sign-in ended too recently", "retry_after": "2026-11-27T17:10:00+00:00", "last_good": null }
+            ] }
+            """);
+
+        Assert.Equal([(false, false), (false, true)], reports.Select(report => (report.SignedIn, report.Deferred)));
+        Assert.Null(reports[0].CheckedAt);
     }
 }

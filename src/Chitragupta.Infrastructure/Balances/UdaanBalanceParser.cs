@@ -9,12 +9,14 @@ namespace Chitragupta.Infrastructure.Balances;
 
 /// <summary>
 /// Reads the JSON the udaan command prints for "udaan check": one result, or several under
-/// "results". Everything the tracker knows about udaan is in this file: its program keys,
-/// which number in a result is the balance, and how it words a failure.
+/// "results". Everything the tracker knows about udaan's results is in this file: its program
+/// keys, which number in a result is the balance, how it words a failure, and what a person
+/// can do about each kind.
 /// </summary>
 internal sealed class UdaanBalanceParser : IBalanceReportParser
 {
     private const int LongestProblem = 300;
+    private const int LongestTrail = 16_000;
 
     // The names are the catalog's, so a balance reads like the program on the card it belongs with.
     private static readonly Dictionary<string, ProgramShape> Programs = new(StringComparer.OrdinalIgnoreCase)
@@ -79,6 +81,9 @@ internal sealed class UdaanBalanceParser : IBalanceReportParser
                 $"The tracker does not know which number is the balance for udaan's program \"{key}\".", checkedAt, null);
         }
 
+        var word = Text(result, "status");
+        var code = status == BalanceCheckStatus.Ok ? null : Text(result, "error_code");
+
         // A failed check carries the last result that worked, with its own time.
         var good = status == BalanceCheckStatus.Ok
             ? result
@@ -91,7 +96,58 @@ internal sealed class UdaanBalanceParser : IBalanceReportParser
             (status, problem) = (BalanceCheckStatus.Failed, $"udaan reported success without a \"{program.Balance}\" number.");
         }
 
-        return new BalanceReport(account, owner, program.Name, status, problem, checkedAt, reading);
+        return new BalanceReport(account, owner, program.Name, status, problem, checkedAt, reading)
+        {
+            ErrorCode = code,
+            Retryable = status != BalanceCheckStatus.Ok && Flag(result, "retryable") == true,
+            // Results from before udaan said so were all real sign-ins.
+            SignedIn = Flag(result, "attempted") != false,
+            Deferred = word == "wait",
+            Advice = Advice(code, account),
+            DurationSeconds = result.TryGetProperty("duration_s", out var took) && took.ValueKind == JsonValueKind.Number
+                ? took.GetDouble()
+                : null,
+            ToolVersion = Text(result, "udaan_version"),
+            Trail = Trail(result),
+        };
+    }
+
+    /// <summary>What a person can do, in udaan's own commands. A kind that clears by itself gets a line that says so.</summary>
+    private static string? Advice(string? code, string account) => code switch
+    {
+        "login_rejected" =>
+            $"The site refused the stored login, and udaan will not send it again. Where udaan runs, run \"udaan set-login {account}\", then \"udaan check {account} --fresh\".",
+        "login_missing" => $"The stored login is incomplete. Where udaan runs, run \"udaan set-login {account}\".",
+        "unknown_page" or "not_signed_in" =>
+            $"The site showed something udaan does not know. Where udaan runs, run \"udaan check {account} --fresh --show\" to watch where it stops.",
+        "parse_failed" => "It signed in, but the balance was not where it used to be. The site changed, so udaan needs a fix.",
+        "otp_rejected" => $"The site would not take the sign-in code. Where udaan runs, run \"udaan check {account} --fresh --show\" to watch it.",
+        "otp_source" => "udaan could not read the mailbox the sign-in code arrives in. Where udaan runs, run \"udaan gmail-login\" again.",
+        "bot_wall" => "The site turned the automation away. udaan has paused this account and tries again by itself.",
+        "otp_timeout" => "The sign-in code did not arrive in time. It is tried again later.",
+        "secrets_unavailable" => "udaan could not reach Kaal, where the logins are kept. It is tried again later; check that Kaal is running if it lasts.",
+        "jev_unavailable" => "udaan could not reach Jev, which reads the pages. It is tried again later.",
+        "page_not_loaded" or "browser_failed" => "The browser or the page did not come up. It is tried again later.",
+        _ => null,
+    };
+
+    private static bool? Flag(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind is JsonValueKind.True or JsonValueKind.False
+            ? value.GetBoolean()
+            : null;
+
+    /// <summary>udaan's "decisions": each step it took and why. Steps and choices only; it never holds a login or a code.</summary>
+    private static string? Trail(JsonElement result)
+    {
+        if (!result.TryGetProperty("decisions", out var decisions)
+            || decisions.ValueKind != JsonValueKind.Array
+            || decisions.GetArrayLength() == 0)
+        {
+            return null;
+        }
+
+        var text = decisions.GetRawText();
+        return text.Length <= LongestTrail ? text : null;
     }
 
     private static ReportedBalance? Reading(JsonElement result, ProgramShape program)

@@ -26,8 +26,9 @@ internal sealed class Tracker : IAsyncDisposable
     private readonly ServiceProvider _services;
     private readonly string _folder;
 
-    private Tracker(ServiceProvider services, string folder, FakeClock clock, FakeFeed feed, RecordingNotifier notifier)
+    private Tracker(ServiceProvider services, string folder, FakeClock clock, FakeFeed feed, RecordingNotifier notifier, FakeChecker checker)
     {
+        Checker = checker;
         _services = services;
         _folder = folder;
         Clock = clock;
@@ -42,6 +43,11 @@ internal sealed class Tracker : IAsyncDisposable
     public FakeFeed Feed { get; }
 
     public RecordingNotifier Notifier { get; }
+
+    /// <summary>Not connected unless a test says so, as on an install without the automation.</summary>
+    public FakeChecker Checker { get; }
+
+    public BalanceCheckRunner Runner => Get<BalanceCheckRunner>();
 
     public string DataFolder => _folder;
 
@@ -72,6 +78,7 @@ internal sealed class Tracker : IAsyncDisposable
         clock.Set(now);
         var feed = new FakeFeed();
         var notifier = new RecordingNotifier();
+        var checker = new FakeChecker();
 
         var services = new ServiceCollection();
         services.AddLogging();
@@ -80,8 +87,9 @@ internal sealed class Tracker : IAsyncDisposable
         services.Replace(ServiceDescriptor.Singleton<ITransactionFeed>(feed));
         services.Replace(ServiceDescriptor.Singleton<INotifier>(notifier));
         services.Replace(ServiceDescriptor.Singleton<ICatalog>(new TestCatalog()));
+        services.Replace(ServiceDescriptor.Singleton<IBalanceChecker>(checker));
 
-        var tracker = new Tracker(services.BuildServiceProvider(), folder, clock, feed, notifier);
+        var tracker = new Tracker(services.BuildServiceProvider(), folder, clock, feed, notifier, checker);
         await tracker._services.MigrateTrackerDatabaseAsync(Ct);
         return tracker;
     }

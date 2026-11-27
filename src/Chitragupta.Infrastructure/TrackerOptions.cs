@@ -28,6 +28,16 @@ public sealed class TrackerOptions
 
     public SmtpOptions Smtp { get; set; } = new();
 
+    public GmailOptions Gmail { get; set; } = new();
+
+    public UdaanOptions Udaan { get; set; } = new();
+
+    public BalanceCheckOptions Balances { get; set; } = new();
+
+    /// <summary>The addresses reminders go to. Blank entries, as an unset environment variable leaves, are skipped.</summary>
+    public IReadOnlyList<string> ReminderRecipients =>
+        Reminders.To.Concat(Smtp.To).Where(address => !string.IsNullOrWhiteSpace(address)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
     public string DatabasePath => Path.Combine(DataDirectory, "tracker.db");
 
     /// <summary>The latest copy of the catalog's source, as the refresh converted it.</summary>
@@ -67,6 +77,43 @@ public sealed class ReminderOptions
     public DayOfWeek DigestDay { get; set; } = DayOfWeek.Sunday;
 
     public TimeOnly DigestAt { get; set; } = new(9, 0);
+
+    /// <summary>Who reminders are written to, however they are sent.</summary>
+    public string[] To { get; set; } = [];
+}
+
+/// <summary>Reminders through the Gmail API, as the account that approved it.</summary>
+public sealed class GmailOptions
+{
+    /// <summary>
+    /// A file holding a send-only Gmail token, as "udaan gmail-login --send" writes it. While the
+    /// file exists, reminders go this way. The token can send as the account and can read nothing.
+    /// </summary>
+    public string? TokenFile { get; set; }
+}
+
+/// <summary>udaan's service, which signs in to the loyalty programs when asked.</summary>
+public sealed class UdaanOptions
+{
+    /// <summary>Where "udaan serve" answers, such as http://host.docker.internal:8791. Left empty, nothing is asked and results only arrive pushed.</summary>
+    public string? Url { get; set; }
+
+    /// <summary>A file holding the service's token, as "udaan token --copy-to" writes it.</summary>
+    public string? TokenFile { get; set; }
+}
+
+public sealed class BalanceCheckOptions
+{
+    /// <summary>From this time of day each account is checked once.</summary>
+    public TimeOnly DailyAt { get; set; } = new(12, 30);
+
+    /// <summary>The most sign-ins tried for one account in a day, the scheduled one included.</summary>
+    public int SignInsPerDay { get; set; } = 2;
+
+    public int RetryAfterHours { get; set; } = 4;
+
+    /// <summary>A balance the automation read is marked stale once it is this many days old.</summary>
+    public int StaleAfterDays { get; set; } = 2;
 }
 
 public sealed class SmtpOptions
@@ -84,10 +131,8 @@ public sealed class SmtpOptions
 
     public string From { get; set; } = "";
 
+    /// <summary>Older name for <see cref="ReminderOptions.To"/>. Both are read.</summary>
     public string[] To { get; set; } = [];
 
-    /// <summary>The addresses to write to. Blank entries, as an unset environment variable leaves, are skipped.</summary>
-    public IReadOnlyList<string> Recipients => To.Where(address => !string.IsNullOrWhiteSpace(address)).ToArray();
-
-    public bool IsConfigured => !string.IsNullOrWhiteSpace(Host) && !string.IsNullOrWhiteSpace(From) && Recipients.Count > 0;
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(Host) && !string.IsNullOrWhiteSpace(From);
 }

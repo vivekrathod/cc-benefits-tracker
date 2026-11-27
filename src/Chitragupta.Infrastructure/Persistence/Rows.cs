@@ -237,9 +237,14 @@ internal sealed class BalanceSnapshotRow
     public DateOnly? ExpiresOn { get; set; }
 }
 
-/// <summary>How the latest automatic check of one account went, keyed by the automation's name for the account.</summary>
-internal sealed class BalanceCheckRow
+/// <summary>
+/// One attempt to read an account's balance, under the automation's name for the account.
+/// Attempts are only ever added, and the newest per account is how it is doing now.
+/// </summary>
+internal sealed class BalanceAttemptRow
 {
+    public int Id { get; set; }
+
     public string Account { get; set; } = "";
 
     public string Owner { get; set; } = "";
@@ -251,4 +256,18 @@ internal sealed class BalanceCheckRow
     public string? Problem { get; set; }
 
     public DateTimeOffset CheckedAt { get; set; }
+
+    public string? ErrorCode { get; set; }
+
+    public bool Retryable { get; set; }
+
+    public bool SignedIn { get; set; }
+
+    public string? Advice { get; set; }
+
+    public double? DurationSeconds { get; set; }
+
+    public string? ToolVersion { get; set; }
+
+    public string? Trail { get; set; }
 }

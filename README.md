@@ -93,37 +93,77 @@ are optional.
 ### Reminders
 
 A nudge goes out 7 and 2 days before a period with value left ends, and a digest on
-Sunday morning. Set the `SMTP_*` and `REMINDER_TO_*` values in `.env` and put the
-password in `secrets/smtp-password`. Without SMTP settings, reminders are written to
-the log.
+Sunday morning. An alert goes out when an automatic balance check needs somebody; see
+"Miles and points". Each is sent once.
+
+Reminders go out the first way that is set up:
+
+1. **Gmail.** Put a send-only Gmail token in the secrets folder as `gmail-send-token.json`.
+   udaan makes one with a single consent click:
+   `udaan gmail-login --send --email you@gmail.com --out <secrets>/gmail-send-token.json`.
+   The token can send as that account and can read nothing. It is picked up without a restart.
+2. **SMTP.** Set the `SMTP_*` values in `.env` and put the password in `secrets/smtp-password`.
+3. **The log**, when neither is set up.
+
+`REMINDER_TO_1` and `REMINDER_TO_2` say who is written to. With Gmail and neither set,
+reminders go to the Gmail account itself.
 
 ### Miles and points
 
 The Points screen keeps a balance per person and loyalty program, with how old the reading
 is and the day the miles lapse when the program gives one. The tracker never signs in to
-a loyalty program. A balance is typed in on that screen, or pushed in by a tool that reads it.
+a loyalty program and holds no login. A balance is typed in on that screen, or read by
+udaan, a separate tool that signs in to loyalty programs with a real browser on a desktop.
 
-udaan, a separate command line tool that signs in to loyalty programs, is such a tool. Its
-output is accepted as it is, one result or several, for every account on the same address:
+**Asking udaan.** `udaan serve` answers on its own machine only, behind a token. Point the
+tracker at it and the tracker runs the schedule:
+
+```
+# on the machine with udaan, once
+udaan token --copy-to <secrets>/udaan-token
+# in .env
+UDAAN_URL=http://host.docker.internal:8791
+```
+
+- Each account is checked once a day from `BALANCE_CHECK_AT` (12:30), one account at a
+  time, with two accounts of the same program kept apart. A reading udaan already took
+  that day counts, so nothing signs in twice for it.
+- A failure that may clear by itself (a code that did not arrive, a browser that did not
+  start) is tried once more four hours later. Nothing else is retried: a rejected login
+  is never sent again, and a site that turned the browser away is left alone until udaan's
+  own pause is over.
+- A sign-in is tried at most twice a day for an account, the scheduled one and "Check now"
+  on the Points screen included. "Check now" takes a reading udaan made in the last hour as
+  it is, so one just taken by hand on the desktop arrives without a second sign-in.
+- udaan keeps the rules that protect an account (one sign-in at a time, a quarter of an
+  hour between two, a hold after a rejected login) and answers "not now" when one applies.
+  The tracker waits for the time it is given.
+
+**What you see.** Every attempt is kept for 90 days. The Points screen shows each account's
+recent attempts, what went wrong in plain words, and what to do about it. A balance the
+automation has not renewed for two days is marked stale, on Points and on Soon, and keeps
+the last number that was read: a failed check never erases a balance. The count beside
+"Points" is everything there that wants a look.
+
+**What you are told.** One email when a check needs you (a rejected login, a page udaan
+does not know), one more if any failure lasts two days, one when it works again, one when
+an account has not been heard about for 26 hours, and one when udaan's service has not
+answered for half an hour. The Sunday digest says how the checks are doing.
+
+**Pushing results in** still works, with or without the service. udaan's output is
+accepted as it is, one result or several, for every account on the same address:
 
 ```bash
 udaan check aa alex --max-age 72000 | curl -sS -X POST -H 'content-type: application/json' \
   --data-binary @- http://localhost:8080/api/balances/udaan
 ```
 
+`tools/check-balances.sh` does that for every account udaan knows, for an install that
+would sooner run a script from cron than keep the service up. Use one or the other.
+
 Each result says whose it is. Its owner is matched to a person by name, or by first name
 while only one person has it; an owner nobody goes by waits on the Points screen and never
-creates a person. Sending the same result again changes nothing, and a failed check keeps
-the last balance and shows what went wrong.
-
-`tools/check-balances.sh` does this for every account udaan knows, one account at a time
-with a pause after each live sign-in, and keeps two accounts of the same program apart.
-Run it once a day on the machine that has udaan:
-
-```
-# crontab: every morning at 7:10
-10 7 * * * CHITRAGUPTA_URL=http://localhost:8080 /path/to/tools/check-balances.sh >> ~/chitragupta-balances.log 2>&1
-```
+creates a person. Sending the same result again changes nothing.
 
 Programs udaan knows that the tracker can read: American AAdvantage, Alaska Atmos Rewards
 and United MileagePlus. Miles that lapse show on the Soon screen once they are inside its
@@ -148,7 +188,14 @@ Everything is under the `Chitragupta` section (`Chitragupta__Name` as an environ
 | `Reminders:NudgeDaysBefore` | `7, 2` | Days before a period ends |
 | `Reminders:BalanceNudgeDaysBefore` | `90, 30` | Days before miles or points lapse |
 | `Reminders:DigestDay`, `DigestAt` | `Sunday`, `09:00` | Weekly digest |
-| `Smtp:Host`, `Port`, `User`, `PasswordFile`, `From`, `To` | none | Email for reminders |
+| `Reminders:To` | none | Who reminders are written to |
+| `Gmail:TokenFile` | none | A send-only Gmail token; reminders go this way while the file exists |
+| `Smtp:Host`, `Port`, `User`, `PasswordFile`, `From` | none | Reminders by SMTP |
+| `Udaan:Url`, `TokenFile` | none | Where `udaan serve` answers, and the file holding its token |
+| `Balances:DailyAt` | `12:30` | From when each account is checked once a day |
+| `Balances:SignInsPerDay` | `2` | The most sign-ins tried for one account in a day |
+| `Balances:RetryAfterHours` | `4` | How long the one retry of the day waits |
+| `Balances:StaleAfterDays` | `2` | Age at which a balance udaan read is marked stale |
 
 ## Operator CLI
 
@@ -181,7 +228,7 @@ From a checkout: `dotnet run --project tools/Chitragupta.Cli -- <command> --data
 src/Chitragupta.Domain          periods, cards, the matcher. No dependencies.
 src/Chitragupta.Application     use cases and ports (feed, store, catalog, clock, notifier)
 src/Chitragupta.Contracts       the records the API returns and accepts
-src/Chitragupta.Infrastructure  SQLite store, SimpleFIN and CSV feeds, catalog, email
+src/Chitragupta.Infrastructure  SQLite store, SimpleFIN and CSV feeds, catalog, email, udaan
 src/Chitragupta.Api             composition root, HTTP routes, the daily worker
 src/Chitragupta.Web             the web app, served by the API
 tools/Chitragupta.Cli           the operator CLI
@@ -204,7 +251,7 @@ repository.
 
 ## What it does not do
 
-- Read a points or miles balance by itself. Balances are pushed in or typed in; see "Miles and points".
+- Sign in to a loyalty program. udaan does that, on a desktop, when the tracker asks; see "Miles and points".
 - Benefits on a cycle other than monthly, quarterly, semiannual or annual (a Global
   Entry credit every four years), and benefits that unlock after a spend threshold.
 - Anything that needs an issuer login.

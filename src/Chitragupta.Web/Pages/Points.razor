@@ -1,15 +1,40 @@
 @page "/points"
+@implements IDisposable
 @inject TrackerClient Api
 
 <PageTitle>Miles and points</PageTitle>
 <h1>Miles and points</h1>
 
 <Loader Ready="@(_view is not null)" Error="@_error">
-    @foreach (var check in _view!.Checks.Where(check => check.Status != "Ok"))
+    @if (_view!.Checker?.UnreachableSince is { } down)
     {
         <p class="error">
-            <strong>@check.Account</strong> (@check.Program): @Format.CheckStatus(check.Status), last tried @Format.Time(check.CheckedAt).
-            @check.Problem
+            <strong>The balance automation is not answering</strong>, since @Format.Time(down). Nothing can be checked until it does.
+            @_view.Checker.Problem
+        </p>
+    }
+    else if (_view.Checker?.Problem is { } problem)
+    {
+        <p class="error">The last check did not complete: @problem It is asked again in a while.</p>
+    }
+
+    @foreach (var check in _view.Checks.Where(check => check.Status != "Ok" || check.Overdue))
+    {
+        <p class="error">
+            <strong>@check.Account</strong> (@check.Program):
+            @if (check.Status == "Ok")
+            {
+                <text>nothing heard since @Format.Time(check.CheckedAt).</text>
+            }
+            else
+            {
+                <text>@Format.CheckStatus(check.Status) since @Format.Time(check.FailingSince ?? check.CheckedAt). @check.Problem</text>
+            }
+            @if (check.Advice is not null)
+            {
+                <br />
+                @check.Advice
+            }
         </p>
     }
 
@@ -69,18 +94,47 @@
                 <tbody>
                     @foreach (var check in _view.Checks)
                     {
-                        <tr>
+                        <tr @key="check.Account">
                             <td>
                                 @check.Account
-                                <div class="muted">@check.Program · last checked @Format.Time(check.CheckedAt)</div>
+                                <div class="muted">@check.Program · last tried @Format.Time(check.CheckedAt)</div>
+                                <div class="marks" aria-label="Recent attempts, oldest first">
+                                    @foreach (var attempt in check.Recent)
+                                    {
+                                        <span class="mark @Mark(attempt)" title="@Format.Time(attempt.CheckedAt): @Format.Attempt(attempt)"></span>
+                                    }
+                                </div>
                             </td>
                             <td class="num">
-                                <span class="chip @(check.Status == "Ok" ? "done" : "now")">@Format.CheckStatus(check.Status)</span>
+                                <span class="chip @(check.Status != "Ok" ? "now" : check.Overdue ? "soon" : "done")">
+                                    @(check.Status == "Ok" && check.Overdue ? "not checked" : Format.CheckStatus(check.Status))
+                                </span>
+                                <div class="actions end">
+                                    @if (check.Queued)
+                                    {
+                                        <span class="muted">@(_view.Checker?.Running == check.Account ? "checking…" : "waiting its turn…")</span>
+                                    }
+                                    else if (check.CanCheckNow)
+                                    {
+                                        <button class="quiet" disabled="@_busy" @onclick="() => CheckNowAsync(check)">Check now</button>
+                                    }
+                                    @if (check.Overdue)
+                                    {
+                                        <button class="quiet" disabled="@_busy" title="For an account the automation no longer has. Its balance stays." @onclick="() => ForgetAsync(check)">Forget</button>
+                                    }
+                                </div>
                             </td>
                         </tr>
                     }
                 </tbody>
             </table>
+            @if (_view.Checker is { } checker)
+            {
+                <p class="muted">
+                    Each account is checked once a day from @Format.TimeOfDay(checker.DailyAt), one at a time. A sign-in is tried at most
+                    @checker.SignInsPerDay times a day for an account, "Check now" included, to stay clear of lockouts.
+                </p>
+            }
         </div>
     }
 </Loader>
@@ -95,8 +149,18 @@
     private string _program = "";
     private long? _amount;
     private DateOnly? _expiresOn;
+    private readonly CancellationTokenSource _leaving = new();
+    private bool _watching;
 
     protected override Task OnInitializedAsync() => LoadAsync();
+
+    public void Dispose()
+    {
+        _leaving.Cancel();
+        _leaving.Dispose();
+    }
+
+    private static string Mark(BalanceAttemptDto attempt) => attempt.Status == "Ok" ? "ok" : attempt.SignedIn ? "bad" : "skip";
 
     private async Task LoadAsync()
     {
@@ -111,6 +175,7 @@
                 .ToArray();
             _view = await Api.GetAsync<BalancesDto>("api/balances");
             _error = null;
+            _ = WatchAsync();
         }
         catch (Exception failure) when (failure is ApiException or HttpRequestException)
         {
@@ -123,6 +188,40 @@
         await Api.PostAsync("api/balances", new RecordBalanceRequest(Guid.Parse(_personId), _program, _amount!.Value, _expiresOn));
         (_program, _amount, _expiresOn) = ("", null, null);
     });
+
+    private Task CheckNowAsync(BalanceCheckDto check) =>
+        RunAsync(() => Api.PostAsync($"api/balances/checks/{Uri.EscapeDataString(check.Account)}"));
+
+    private Task ForgetAsync(BalanceCheckDto check) =>
+        RunAsync(() => Api.DeleteAsync($"api/balances/checks/{Uri.EscapeDataString(check.Account)}"));
+
+    /// <summary>While a check somebody asked for is waiting or running, the page looks again by itself.</summary>
+    private async Task WatchAsync()
+    {
+        if (_watching)
+        {
+            return;
+        }
+
+        _watching = true;
+        try
+        {
+            while (_view is not null && (_view.Checker?.Running is not null || _view.Checks.Any(check => check.Queued)))
+            {
+                await Task.Delay(TimeSpan.FromSeconds(5), _leaving.Token);
+                _view = await Api.GetAsync<BalancesDto>("api/balances");
+                StateHasChanged();
+            }
+        }
+        catch (Exception stopped) when (stopped is OperationCanceledException or ObjectDisposedException or ApiException or HttpRequestException)
+        {
+            // Leaving the page, or a server that went away: the next visit loads it again.
+        }
+        finally
+        {
+            _watching = false;
+        }
+    }
 
     private Task RemoveAsync(BalanceDto balance) =>
         RunAsync(() => Api.DeleteAsync($"api/balances?personId={balance.PersonId}&program={Uri.EscapeDataString(balance.Program)}"));

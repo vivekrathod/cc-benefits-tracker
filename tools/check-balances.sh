@@ -2,6 +2,9 @@
 # Reads miles and points balances with udaan, one account at a time, and hands every
 # result to the tracker. Run it once a day from cron or launchd on the machine that has udaan.
 #
+# This is for an install without "udaan serve". With the service and UDAAN_URL set, the
+# tracker asks for the checks itself and this script is not needed. Use one or the other.
+#
 #   tools/check-balances.sh [account ...]
 #
 # With no account named, every account "udaan list" shows is checked.

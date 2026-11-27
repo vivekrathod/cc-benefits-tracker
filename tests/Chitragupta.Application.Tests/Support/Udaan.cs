@@ -28,12 +28,15 @@ internal static class Udaan
     }
 
     public static string Failed(
-        string account, string program, string owner, string status, string error, string checkedAt, string? lastGood = null) =>
+        string account, string program, string owner, string status, string error, string? checkedAt, string? lastGood = null,
+        string? code = null, bool retryable = false, bool attempted = true) =>
         $$"""
         {
          "account": "{{account}}", "program": "{{program}}", "owner": "{{owner}}", "otp": "gmail", "proxy": false,
-         "program_name": "Some Program", "ok": false, "status": "{{status}}", "error": "{{error}}",
-         "checked_at": "{{checkedAt}}", "decisions": [], "duration_s": 40.1,
+         "program_name": "Some Program", "udaan_version": "0.3.0", "ok": false, "status": "{{status}}", "error": "{{error}}",
+         {{(code is null ? "" : $"\"error_code\": \"{code}\", \"retryable\": {(retryable ? "true" : "false")},")}}
+         {{(attempted ? "" : "\"attempted\": false,")}}
+         {{(checkedAt is null ? "" : $"\"checked_at\": \"{checkedAt}\", \"decisions\": [], \"duration_s\": 40.1,")}}
          "last_good": {{lastGood ?? "null"}}
         }
         """;

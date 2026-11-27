@@ -34,7 +34,7 @@ internal sealed class TrackerDbContext(DbContextOptions<TrackerDbContext> option
 
     public DbSet<BalanceSnapshotRow> BalanceSnapshots => Set<BalanceSnapshotRow>();
 
-    public DbSet<BalanceCheckRow> BalanceChecks => Set<BalanceCheckRow>();
+    public DbSet<BalanceAttemptRow> BalanceAttempts => Set<BalanceAttemptRow>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configuration)
     {
@@ -126,10 +126,10 @@ internal sealed class TrackerDbContext(DbContextOptions<TrackerDbContext> option
             balance.HasIndex(row => new { row.PersonId, row.Program });
         });
 
-        model.Entity<BalanceCheckRow>(check =>
+        model.Entity<BalanceAttemptRow>(attempt =>
         {
-            check.ToTable("BalanceChecks");
-            check.HasKey(row => row.Account);
+            attempt.ToTable("BalanceAttempts");
+            attempt.HasIndex(row => new { row.Account, row.CheckedAt }).IsUnique();
         });
     }
 
