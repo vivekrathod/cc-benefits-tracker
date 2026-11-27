@@ -1,6 +1,7 @@
 {
-  "name": "Card benefits",
-  "short_name": "Benefits",
+  "name": "Chitragupta",
+  "short_name": "Chitragupta",
+  "description": "Which credit card benefits are used, left, or about to expire.",
   "id": "./",
   "start_url": "./",
   "display": "standalone",

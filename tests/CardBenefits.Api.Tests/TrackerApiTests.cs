@@ -201,7 +201,7 @@ public sealed class TrackerApiTests : IDisposable
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             Assert.Equal("text/html", response.Content.Headers.ContentType?.MediaType);
-            Assert.Contains("<title>Card benefits</title>", await response.Content.ReadAsStringAsync(Ct));
+            Assert.Contains("<title>Chitragupta</title>", await response.Content.ReadAsStringAsync(Ct));
         }
     }
 

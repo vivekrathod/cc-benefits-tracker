@@ -1,8 +1,12 @@
-# Card Benefits Tracker
+# Chitragupta
 
 A self-hosted service that tells a household which credit card benefits have been
 used, which are left, and which are about to expire, with as little manual entry as
 the data allows.
+
+It is named after Chitragupta, the record keeper of Hindu tradition who keeps the
+account of every deed. The repository, the container and the commands keep their
+working names (`cc-benefits-tracker`, `tracker`).
 
 Issuers do not publish a "benefits used" feed, so usage is inferred. When a benefit is
 used, the issuer posts a statement credit on the card a few days later. The service
