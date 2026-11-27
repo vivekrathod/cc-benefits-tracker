@@ -58,6 +58,31 @@ Short notes on the choices that are not obvious from the code, newest concerns f
 - **The access URL** is read from a file each time, split into endpoint and
   credentials immediately, and never placed in a URL, a log line or an exception.
 
+## Miles and points
+
+- **Balances are pushed in, never pulled.** Reading a balance means signing in to a
+  loyalty program with a real browser, a password and a one-time code. That lives in a
+  separate tool (udaan) on a machine with a desktop. The tracker takes the JSON that tool
+  already prints, so it holds no login and "sync now" can never set off a sign-in.
+- **One address for every account.** A result names its account, owner and program, so
+  the address does not have to. Running the accounts one at a time and spaced apart is
+  the runner script's job, not the API's.
+- **Everything known about udaan is in one parser**: its program keys, which number in a
+  result is the balance, and how it words a failure. A program it does not list is
+  reported as unknown instead of guessed at.
+- **Readings are only added, and the newest is the balance.** A result's own check time
+  decides, so the same result sent twice, or an old one arriving late, changes nothing.
+- **A failed check never touches a balance.** How the latest check of each account went
+  is stored separately and shown on the Points screen until a check works again.
+- **An owner is matched to a person by name**, whole or first, and only when exactly one
+  person fits. Anyone else waits: a result never creates a person, as a feed account
+  never creates a card.
+- **Program names are the catalog's where it has one**, so a balance reads like the
+  program on the card. They are compared without regard to case and the first spelling
+  seen is kept.
+- **Miles get their own, much earlier reminders** (90 and 30 days), keyed by the day they
+  lapse: activity in the program moves that day out, and the new day earns new reminders.
+
 ## Periods
 
 - **Periods are regenerated, not edited.** They are computed for a window from the
@@ -104,8 +129,8 @@ Short notes on the choices that are not obvious from the code, newest concerns f
 - **Use-case tests use the real SQLite store.** Fakes exist only for the feed, the
   clock and the notifier. The store is the part most likely to disagree with a fake.
 - **Money is whole cents**, dates are `DateOnly`, enums are stored by name.
-- **The points program** is on the card product, and the balance snapshot table is
-  reserved for phase 2; nothing writes to it yet.
+- **The points program** is on the card product. A balance is not: it belongs to a
+  person and a program, with or without a card that earns into it.
 
 ## Operations
 

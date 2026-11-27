@@ -125,6 +125,32 @@ public sealed record CatalogStatusDto(
     string? Problem,
     IReadOnlyList<string> Flags);
 
-public sealed record SummaryDto(int ExpiringSoon, int ReviewItems, int NewAccounts, int SyncProblems);
+/// <summary>The counts beside the navigation. <c>BalanceProblems</c> is the automatic balance checks that need a look.</summary>
+public sealed record SummaryDto(int ExpiringSoon, int ReviewItems, int NewAccounts, int SyncProblems, int BalanceProblems = 0);
 
 public sealed record ImportResultDto(int Received, int Changed);
+
+/// <summary>
+/// A person's miles or points in one program, as last read. <c>AgeDays</c> says how old the reading is.
+/// <c>ExpiresSoon</c> is true from the first expiry reminder onward.
+/// </summary>
+public sealed record BalanceDto(
+    Guid PersonId,
+    string PersonName,
+    string Program,
+    long Amount,
+    DateTimeOffset AsOf,
+    int AgeDays,
+    string Source,
+    DateOnly? ExpiresOn,
+    int? DaysUntilExpiry,
+    bool ExpiresSoon);
+
+/// <summary>How the latest automatic check of one account went. Any status but "Ok" needs a look.</summary>
+public sealed record BalanceCheckDto(
+    string Account, string Owner, string Program, string Status, string? Problem, DateTimeOffset CheckedAt);
+
+public sealed record BalancesDto(IReadOnlyList<BalanceDto> Balances, IReadOnlyList<BalanceCheckDto> Checks);
+
+/// <summary>What became of one account in an automation's output. <c>Recorded</c> is false when the reading was already known.</summary>
+public sealed record BalanceImportLineDto(string Account, string Status, bool Recorded, string? Problem);

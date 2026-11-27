@@ -34,3 +34,6 @@ public sealed record AssignReviewRequest(string BenefitId, string? Keyword);
 
 /// <summary>Says a credit is not a benefit. A keyword also ignores similar descriptions from now on.</summary>
 public sealed record DismissReviewRequest(string? IgnoreKeyword);
+
+/// <summary>Sets a miles or points balance by hand, as it stands now. The expiry day is optional.</summary>
+public sealed record RecordBalanceRequest(Guid PersonId, string Program, long Amount, DateOnly? ExpiresOn);

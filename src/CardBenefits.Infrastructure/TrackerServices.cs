@@ -1,4 +1,5 @@
 using CardBenefits.Application;
+using CardBenefits.Application.Balances;
 using CardBenefits.Application.Cards;
 using CardBenefits.Application.Matching;
 using CardBenefits.Application.Ports;
@@ -8,6 +9,7 @@ using CardBenefits.Application.Statements;
 using CardBenefits.Application.Sync;
 using CardBenefits.Application.Usage;
 using CardBenefits.Application.Views;
+using CardBenefits.Infrastructure.Balances;
 using CardBenefits.Infrastructure.Catalog;
 using CardBenefits.Infrastructure.Feeds.Csv;
 using CardBenefits.Infrastructure.Feeds.SimpleFin;
@@ -42,6 +44,7 @@ public static class TrackerServices
             MinutesBetweenSyncs = options.SimpleFin.MinutesBetweenSyncs,
             DailySyncAt = options.SimpleFin.DailyAt,
             NudgeDaysBefore = options.Reminders.NudgeDaysBefore,
+            BalanceNudgeDaysBefore = options.Reminders.BalanceNudgeDaysBefore,
             DigestDay = options.Reminders.DigestDay,
             DigestAt = options.Reminders.DigestAt,
         });
@@ -55,6 +58,7 @@ public static class TrackerServices
         services.AddSingleton<ITrackerStore, SqliteTrackerStore>();
 
         services.AddSingleton<IStatementParser, CsvStatementParser>();
+        services.AddSingleton<IBalanceReportParser, UdaanBalanceParser>();
         services.AddSingleton(new SimpleFinAccess(options.SimpleFin.AccessUrlFile));
         services.AddHttpClient<SimpleFinFeed>(http => http.Timeout = TimeSpan.FromMinutes(2));
         services.AddSingleton<ITransactionFeed>(provider => provider.GetRequiredService<SimpleFinFeed>());
@@ -74,6 +78,7 @@ public static class TrackerServices
         services.AddSingleton<UsageService>();
         services.AddSingleton<ReviewService>();
         services.AddSingleton<StatementImportService>();
+        services.AddSingleton<BalanceService>();
         services.AddSingleton<TrackerQueries>();
         services.AddSingleton<ReminderService>();
         services.AddSingleton<DatabaseBackup>();

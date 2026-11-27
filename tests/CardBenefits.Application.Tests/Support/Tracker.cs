@@ -1,3 +1,4 @@
+using CardBenefits.Application.Balances;
 using CardBenefits.Application.Cards;
 using CardBenefits.Application.Matching;
 using CardBenefits.Application.Ports;
@@ -61,6 +62,8 @@ internal sealed class Tracker : IAsyncDisposable
     public Rematcher Rematcher => Get<Rematcher>();
 
     public StatementImportService Statements => Get<StatementImportService>();
+
+    public BalanceService Balances => Get<BalanceService>();
 
     public static async Task<Tracker> StartAsync(string now = "2026-11-25 10:00")
     {

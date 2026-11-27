@@ -16,6 +16,7 @@ are marked used with one tap.
 - **Soon**: unused or partly used benefits ending in the next days, for everyone, soonest first.
 - **Cards**: per card, each benefit's current period with used and remaining.
 - **Value**: benefits used this cardmember year against the annual fee.
+- **Points**: miles and points per person and program, how old each reading is, and when they lapse.
 - **Review**: new feed accounts waiting to be confirmed as cards, and credits the matcher could not settle.
 - **Sync**: last successful sync per institution, and a rationed "sync now".
 - **Manage**: people, cards, statement imports, product changes.
@@ -93,6 +94,38 @@ Sunday morning. Set the `SMTP_*` and `REMINDER_TO_*` values in `.env` and put th
 password in `secrets/smtp-password`. Without SMTP settings, reminders are written to
 the log.
 
+### Miles and points
+
+The Points screen keeps a balance per person and loyalty program, with how old the reading
+is and the day the miles lapse when the program gives one. The tracker never signs in to
+a loyalty program. A balance is typed in on that screen, or pushed in by a tool that reads it.
+
+udaan, a separate command line tool that signs in to loyalty programs, is such a tool. Its
+output is accepted as it is, one result or several, for every account on the same address:
+
+```bash
+udaan check aa alex --max-age 72000 | curl -sS -X POST -H 'content-type: application/json' \
+  --data-binary @- http://localhost:8080/api/balances/udaan
+```
+
+Each result says whose it is. Its owner is matched to a person by name, or by first name
+while only one person has it; an owner nobody goes by waits on the Points screen and never
+creates a person. Sending the same result again changes nothing, and a failed check keeps
+the last balance and shows what went wrong.
+
+`tools/udaan-balances.sh` does this for every account udaan knows, one account at a time
+with a pause after each live sign-in, and keeps two accounts of the same program apart.
+Run it once a day on the machine that has udaan:
+
+```
+# crontab: every morning at 7:10
+10 7 * * * TRACKER_URL=http://localhost:8080 /path/to/tools/udaan-balances.sh >> ~/udaan-balances.log 2>&1
+```
+
+Programs udaan knows that the tracker can read: American AAdvantage, Alaska Atmos Rewards
+and United MileagePlus. Miles that lapse show on the Soon screen once they are inside its
+window, and reminders go out 90 and 30 days before.
+
 ### Settings
 
 Everything is under the `Tracker` section (`Tracker__Name` as an environment variable).
@@ -110,6 +143,7 @@ Everything is under the `Tracker` section (`Tracker__Name` as an environment var
 | `SimpleFin:WindowDays` | `14` | Days each sync asks for, overlapping the last |
 | `SimpleFin:MinutesBetweenSyncs` | `120` | Spacing enforced on "sync now" |
 | `Reminders:NudgeDaysBefore` | `7, 2` | Days before a period ends |
+| `Reminders:BalanceNudgeDaysBefore` | `90, 30` | Days before miles or points lapse |
 | `Reminders:DigestDay`, `DigestAt` | `Sunday`, `09:00` | Weekly digest |
 | `Smtp:Host`, `Port`, `User`, `PasswordFile`, `From`, `To` | none | Email for reminders |
 
@@ -167,7 +201,7 @@ repository.
 
 ## What it does not do
 
-- Points and miles balances (phase 2; the schema reserves a balance snapshot table).
+- Read a points or miles balance by itself. Balances are pushed in or typed in; see "Miles and points".
 - Benefits on a cycle other than monthly, quarterly, semiannual or annual (a Global
   Entry credit every four years), and benefits that unlock after a spend threshold.
 - Anything that needs an issuer login.

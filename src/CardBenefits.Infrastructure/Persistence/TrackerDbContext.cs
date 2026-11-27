@@ -34,6 +34,8 @@ internal sealed class TrackerDbContext(DbContextOptions<TrackerDbContext> option
 
     public DbSet<BalanceSnapshotRow> BalanceSnapshots => Set<BalanceSnapshotRow>();
 
+    public DbSet<BalanceCheckRow> BalanceChecks => Set<BalanceCheckRow>();
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configuration)
     {
         // SQLite cannot sort or compare a DateTimeOffset, so instants are stored as UTC milliseconds.
@@ -43,6 +45,8 @@ internal sealed class TrackerDbContext(DbContextOptions<TrackerDbContext> option
         configuration.Properties<FeedAccountStatus>().HaveConversion<string>();
         configuration.Properties<UsageSource>().HaveConversion<string>();
         configuration.Properties<ReviewReason>().HaveConversion<string>();
+        configuration.Properties<BalanceSource>().HaveConversion<string>();
+        configuration.Properties<BalanceCheckStatus>().HaveConversion<string>();
     }
 
     protected override void OnModelCreating(ModelBuilder model)
@@ -116,7 +120,17 @@ internal sealed class TrackerDbContext(DbContextOptions<TrackerDbContext> option
             reminder.HasKey(row => row.Key);
         });
 
-        model.Entity<BalanceSnapshotRow>().ToTable("BalanceSnapshots");
+        model.Entity<BalanceSnapshotRow>(balance =>
+        {
+            balance.ToTable("BalanceSnapshots");
+            balance.HasIndex(row => new { row.PersonId, row.Program });
+        });
+
+        model.Entity<BalanceCheckRow>(check =>
+        {
+            check.ToTable("BalanceChecks");
+            check.HasKey(row => row.Account);
+        });
     }
 
     private sealed class InstantConverter() : ValueConverter<DateTimeOffset, long>(

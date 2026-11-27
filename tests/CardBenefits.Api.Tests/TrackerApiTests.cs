@@ -152,9 +152,50 @@ public sealed class TrackerApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Miles_arrive_from_udaan_on_one_address_and_can_be_set_and_removed_by_hand()
+    {
+        var person = await PostAsync<PersonDto>("/api/people", new AddPersonRequest("Alex"));
+        var expires = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(400);
+
+        // The body is what "udaan check" printed, piped through curl untouched.
+        var result = $$"""
+            { "account": "alex-aa", "program": "aa", "owner": "alex", "ok": true, "status": "ok", "source": "live",
+              "checked_at": "{{DateTimeOffset.UtcNow.AddMinutes(-5):yyyy-MM-ddTHH:mm:ss}}+00:00",
+              "balance": { "award_miles": 45210, "loyalty_points": 0, "miles_expire": "{{expires:yyyy-MM-dd}}" } }
+            """;
+        var posted = await _client.PostAsync("/api/balances/udaan", new StringContent(result, Encoding.UTF8, "application/json"), Ct);
+        Assert.Equal(HttpStatusCode.OK, posted.StatusCode);
+        Assert.Equal([new BalanceImportLineDto("alex-aa", "Ok", true, null)], await posted.Content.ReadFromJsonAsync<List<BalanceImportLineDto>>(Ct));
+
+        // curl's own content type, for when the header is left off.
+        var again = await _client.PostAsync(
+            "/api/balances/udaan", new StringContent(result, Encoding.UTF8, "application/x-www-form-urlencoded"), Ct);
+        Assert.Equal([new BalanceImportLineDto("alex-aa", "Ok", false, null)], await again.Content.ReadFromJsonAsync<List<BalanceImportLineDto>>(Ct));
+
+        var byHand = await _client.PostAsJsonAsync("/api/balances", new RecordBalanceRequest(person.Id, "Chase Ultimate Rewards", 80_000, null), Ct);
+        Assert.Equal(HttpStatusCode.NoContent, byHand.StatusCode);
+
+        var view = await GetAsync<BalancesDto>("/api/balances");
+        Assert.Equal(
+            [("American AAdvantage", 45_210L, "Automation", (DateOnly?)expires, (int?)400), ("Chase Ultimate Rewards", 80_000L, "Manual", null, null)],
+            view.Balances.Select(balance => (balance.Program, balance.Amount, balance.Source, balance.ExpiresOn, balance.DaysUntilExpiry)));
+        Assert.All(view.Balances, balance => Assert.Equal((person.Id, "Alex", false), (balance.PersonId, balance.PersonName, balance.ExpiresSoon)));
+        Assert.Equal(("alex-aa", "Ok"), (view.Checks.Single().Account, view.Checks.Single().Status));
+
+        var remove = $"/api/balances?personId={person.Id}&program={Uri.EscapeDataString("Chase Ultimate Rewards")}";
+        Assert.Equal(HttpStatusCode.NoContent, (await _client.DeleteAsync(remove, Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await _client.DeleteAsync(remove, Ct)).StatusCode);
+        Assert.Single((await GetAsync<BalancesDto>("/api/balances")).Balances);
+
+        var notAResult = await _client.PostAsync("/api/balances/udaan", new StringContent("udaan: command not found"), Ct);
+        Assert.Equal(HttpStatusCode.BadRequest, notAResult.StatusCode);
+        Assert.Contains("udaan check", await DetailAsync(notAResult));
+    }
+
+    [Fact]
     public async Task The_web_app_is_served_for_any_page_address()
     {
-        foreach (var path in new[] { "/", "/review" })
+        foreach (var path in new[] { "/", "/review", "/points" })
         {
             var response = await _client.GetAsync(path, Ct);
 

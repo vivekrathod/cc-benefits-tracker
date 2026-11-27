@@ -1,0 +1,40 @@
+@* One person's miles or points in one program: the number, how old the reading is, and when it lapses. *@
+<div class="period">
+    <div class="row">
+        <div>
+            <div class="name">@Balance.Program</div>
+            @if (ShowPerson)
+            {
+                <div class="muted">@Balance.PersonName</div>
+            }
+        </div>
+        <div class="amount">@Format.Count(Balance.Amount)</div>
+    </div>
+    <div class="row">
+        <div class="muted">
+            @(Balance.Source == "Manual" ? "typed in" : "read") @Format.Age(Balance.AgeDays)
+        </div>
+        @if (Balance.DaysUntilExpiry is { } days)
+        {
+            <span class="chip @(days <= 30 ? "now" : Balance.ExpiresSoon ? "soon" : "")">
+                @(Balance.ExpiresSoon ? Format.UntilExpiry(days) : $"expire {Format.LongDay(Balance.ExpiresOn!.Value)}")
+            </span>
+        }
+    </div>
+    @if (OnRemove.HasDelegate)
+    {
+        <div class="actions">
+            <button class="quiet" disabled="@Busy" @onclick="() => OnRemove.InvokeAsync(Balance)">Remove</button>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public BalanceDto Balance { get; set; } = null!;
+
+    [Parameter] public bool ShowPerson { get; set; }
+
+    [Parameter] public bool Busy { get; set; }
+
+    [Parameter] public EventCallback<BalanceDto> OnRemove { get; set; }
+}

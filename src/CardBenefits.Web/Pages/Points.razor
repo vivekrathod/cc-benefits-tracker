@@ -1,0 +1,147 @@
+@page "/points"
+@inject TrackerClient Api
+
+<PageTitle>Miles and points</PageTitle>
+<h1>Miles and points</h1>
+
+<Loader Ready="@(_view is not null)" Error="@_error">
+    @foreach (var check in _view!.Checks.Where(check => check.Status != "Ok"))
+    {
+        <p class="error">
+            <strong>@check.Account</strong> (@check.Program): @Format.CheckStatus(check.Status), last tried @Format.Time(check.CheckedAt).
+            @check.Problem
+        </p>
+    }
+
+    @if (_view.Balances.Count == 0)
+    {
+        <p class="empty">No balances yet. They arrive by themselves once an automatic check is set up, or can be typed in below.</p>
+    }
+
+    @foreach (var person in _view.Balances.GroupBy(balance => (balance.PersonId, balance.PersonName)))
+    {
+        <h2>@person.Key.PersonName</h2>
+        <div class="card">
+            @foreach (var balance in person)
+            {
+                <BalanceRow @key="(balance.PersonId, balance.Program)" Balance="balance" Busy="_busy" OnRemove="RemoveAsync" />
+            }
+        </div>
+    }
+
+    <h2>Set a balance by hand</h2>
+    <div class="card">
+        <p class="muted">For a program nothing checks automatically. Saving under a name that is already listed replaces its number.</p>
+        <div class="fields">
+            <div>
+                <label>Whose?</label>
+                <select @bind="_personId">
+                    <option value="">Choose…</option>
+                    @foreach (var person in _people!)
+                    {
+                        <option value="@person.Id">@person.Name</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label>Program</label>
+                <input @bind="_program" @bind:event="oninput" list="programs" placeholder="Chase Ultimate Rewards" />
+                <datalist id="programs">
+                    @foreach (var program in _programs!)
+                    {
+                        <option value="@program"></option>
+                    }
+                </datalist>
+            </div>
+            <div><label>Balance</label><input type="number" min="0" step="1" style="width:8rem" @bind="_amount" @bind:event="oninput" /></div>
+            <div><label>Expire on (optional)</label><input type="date" @bind="_expiresOn" /></div>
+        </div>
+        <div class="actions">
+            <button class="primary" disabled="@(_busy || string.IsNullOrEmpty(_personId) || string.IsNullOrWhiteSpace(_program) || _amount is null or < 0)" @onclick="SaveAsync">Save</button>
+        </div>
+    </div>
+
+    @if (_view.Checks.Count > 0)
+    {
+        <h2>Automatic checks</h2>
+        <div class="card">
+            <table>
+                <tbody>
+                    @foreach (var check in _view.Checks)
+                    {
+                        <tr>
+                            <td>
+                                @check.Account
+                                <div class="muted">@check.Program · last checked @Format.Time(check.CheckedAt)</div>
+                            </td>
+                            <td class="num">
+                                <span class="chip @(check.Status == "Ok" ? "done" : "now")">@Format.CheckStatus(check.Status)</span>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</Loader>
+
+@code {
+    private BalancesDto? _view;
+    private IReadOnlyList<PersonDto>? _people;
+    private IReadOnlyList<string>? _programs;
+    private string? _error;
+    private bool _busy;
+    private string _personId = "";
+    private string _program = "";
+    private long? _amount;
+    private DateOnly? _expiresOn;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _people ??= await Api.GetAsync<IReadOnlyList<PersonDto>>("api/people");
+            _programs ??= (await Api.GetAsync<IReadOnlyList<ProductDto>>("api/catalog/products"))
+                .Select(product => product.PointsProgram)
+                .OfType<string>()
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Order(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            _view = await Api.GetAsync<BalancesDto>("api/balances");
+            _error = null;
+        }
+        catch (Exception failure) when (failure is ApiException or HttpRequestException)
+        {
+            _error = Format.Failure(failure);
+        }
+    }
+
+    private Task SaveAsync() => RunAsync(async () =>
+    {
+        await Api.PostAsync("api/balances", new RecordBalanceRequest(Guid.Parse(_personId), _program, _amount!.Value, _expiresOn));
+        (_program, _amount, _expiresOn) = ("", null, null);
+    });
+
+    private Task RemoveAsync(BalanceDto balance) =>
+        RunAsync(() => Api.DeleteAsync($"api/balances?personId={balance.PersonId}&program={Uri.EscapeDataString(balance.Program)}"));
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+            await LoadAsync();
+        }
+        catch (Exception failure) when (failure is ApiException or HttpRequestException)
+        {
+            _error = Format.Failure(failure);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

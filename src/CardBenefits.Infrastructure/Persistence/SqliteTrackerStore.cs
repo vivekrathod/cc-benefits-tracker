@@ -471,6 +471,69 @@ internal sealed class SqliteTrackerStore(IDbContextFactory<TrackerDbContext> con
         await db.Reminders.Where(row => row.Key == key).ExecuteDeleteAsync(cancellationToken);
     }
 
+    // Miles and points
+
+    public async Task<IReadOnlyList<ProgramBalance>> GetLatestBalancesAsync(CancellationToken cancellationToken)
+    {
+        await using var db = await contexts.CreateDbContextAsync(cancellationToken);
+
+        // A household has a handful of balances with a reading a day each, so the newest per
+        // person and program is picked here, where names can be compared without regard to case.
+        return (await db.BalanceSnapshots.AsNoTracking().ToListAsync(cancellationToken))
+            .GroupBy(row => (row.PersonId, Program: row.Program.ToUpperInvariant()))
+            .Select(readings => readings.OrderByDescending(row => row.AsOf).ThenByDescending(row => row.Id).First())
+            .Select(row => new ProgramBalance(row.PersonId, row.Program, row.Balance, row.AsOf, row.Source, row.ExpiresOn))
+            .ToArray();
+    }
+
+    public async Task AddBalanceAsync(ProgramBalance balance, CancellationToken cancellationToken)
+    {
+        await using var db = await contexts.CreateDbContextAsync(cancellationToken);
+        db.BalanceSnapshots.Add(new BalanceSnapshotRow
+        {
+            PersonId = balance.PersonId,
+            Program = balance.Program,
+            Balance = balance.Amount,
+            AsOf = balance.AsOf,
+            Source = balance.Source,
+            ExpiresOn = balance.ExpiresOn,
+        });
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task DeleteBalancesAsync(Guid personId, string program, CancellationToken cancellationToken)
+    {
+        await using var db = await contexts.CreateDbContextAsync(cancellationToken);
+        var readings = await db.BalanceSnapshots.Where(row => row.PersonId == personId).ToListAsync(cancellationToken);
+        db.BalanceSnapshots.RemoveRange(readings.Where(row => row.Program.Equals(program, StringComparison.OrdinalIgnoreCase)));
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<BalanceCheck>> GetBalanceChecksAsync(CancellationToken cancellationToken)
+    {
+        await using var db = await contexts.CreateDbContextAsync(cancellationToken);
+        return (await db.BalanceChecks.AsNoTracking().ToListAsync(cancellationToken))
+            .Select(row => new BalanceCheck(row.Account, row.Owner, row.Program, row.Status, row.Problem, row.CheckedAt))
+            .ToArray();
+    }
+
+    public async Task SaveBalanceCheckAsync(BalanceCheck check, CancellationToken cancellationToken)
+    {
+        await using var db = await contexts.CreateDbContextAsync(cancellationToken);
+        var row = await db.BalanceChecks.FindAsync([check.Account], cancellationToken);
+        if (row is null)
+        {
+            db.BalanceChecks.Add(row = new BalanceCheckRow { Account = check.Account });
+        }
+
+        row.Owner = check.Owner;
+        row.Program = check.Program;
+        row.Status = check.Status;
+        row.Problem = check.Problem;
+        row.CheckedAt = check.CheckedAt;
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task BackupAsync(string path, CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);

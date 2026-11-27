@@ -30,6 +30,34 @@ namespace CardBenefits.Infrastructure.Persistence.Migrations
                     b.ToTable("AcknowledgedFlags", (string)null);
                 });
 
+            modelBuilder.Entity("CardBenefits.Infrastructure.Persistence.BalanceCheckRow", b =>
+                {
+                    b.Property<string>("Account")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CheckedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Owner")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Problem")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Program")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Account");
+
+                    b.ToTable("BalanceChecks", (string)null);
+                });
+
             modelBuilder.Entity("CardBenefits.Infrastructure.Persistence.BalanceSnapshotRow", b =>
                 {
                     b.Property<int>("Id")
@@ -41,6 +69,9 @@ namespace CardBenefits.Infrastructure.Persistence.Migrations
 
                     b.Property<long>("Balance")
                         .HasColumnType("INTEGER");
+
+                    b.Property<DateOnly?>("ExpiresOn")
+                        .HasColumnType("TEXT");
 
                     b.Property<Guid>("PersonId")
                         .HasColumnType("TEXT");
@@ -54,6 +85,8 @@ namespace CardBenefits.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("PersonId", "Program");
 
                     b.ToTable("BalanceSnapshots", (string)null);
                 });

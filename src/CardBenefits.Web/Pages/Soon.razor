@@ -12,11 +12,12 @@
 </div>
 
 <Loader Ready="@(_periods is not null)" Error="@_error">
-    @if (_periods!.Count == 0)
+    @if (_periods!.Count == 0 && Lapsing.Length == 0)
     {
         <p class="empty">Nothing with value left ends in the next @_days days.</p>
     }
-    else
+
+    @if (_periods.Count > 0)
     {
         <p class="muted">@Format.Money(_periods.Sum(period => period.Remaining)) still to use across @_periods.Count benefits.</p>
         <div class="card">
@@ -26,12 +27,30 @@
             }
         </div>
     }
+
+    @if (Lapsing.Length > 0)
+    {
+        <h2>Miles and points</h2>
+        <div class="card">
+            @foreach (var balance in Lapsing)
+            {
+                <BalanceRow @key="(balance.PersonId, balance.Program)" Balance="balance" ShowPerson="true" />
+            }
+        </div>
+    }
 </Loader>
 
 @code {
     private IReadOnlyList<PeriodDto>? _periods;
+    private IReadOnlyList<BalanceDto> _balances = [];
     private string? _error;
     private int _days = 14;
+
+    /// <summary>Balances with something to lose inside the chosen window, soonest first.</summary>
+    private BalanceDto[] Lapsing => _balances
+        .Where(balance => balance.DaysUntilExpiry is { } days && days >= 0 && days <= _days)
+        .OrderBy(balance => balance.DaysUntilExpiry)
+        .ToArray();
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
@@ -45,6 +64,7 @@
     {
         try
         {
+            _balances = (await Api.GetAsync<BalancesDto>("api/balances")).Balances;
             _periods = await Api.GetAsync<IReadOnlyList<PeriodDto>>($"api/expiring?days={_days}");
             _error = null;
         }

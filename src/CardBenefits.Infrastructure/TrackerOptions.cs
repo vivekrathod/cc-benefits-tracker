@@ -61,6 +61,9 @@ public sealed class ReminderOptions
 {
     public int[] NudgeDaysBefore { get; set; } = [7, 2];
 
+    /// <summary>Days before miles or points lapse at which a reminder goes out.</summary>
+    public int[] BalanceNudgeDaysBefore { get; set; } = [90, 30];
+
     public DayOfWeek DigestDay { get; set; } = DayOfWeek.Sunday;
 
     public TimeOnly DigestAt { get; set; } = new(9, 0);

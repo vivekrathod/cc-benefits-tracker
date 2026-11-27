@@ -1,4 +1,5 @@
 using CardBenefits.Application.Tests.Support;
+using CardBenefits.Contracts;
 using static CardBenefits.Application.Tests.Support.FakeFeed;
 
 namespace CardBenefits.Application.Tests;
@@ -82,5 +83,77 @@ public class ReminderTests
         tracker.Notifier.Broken = false;
         Assert.Equal(1, await tracker.Reminders.RunAsync(Ct));
         Assert.Single(tracker.Notifier.Sent);
+    }
+
+    [Fact]
+    public async Task Miles_get_one_reminder_ninety_days_before_they_lapse_and_one_at_thirty()
+    {
+        // 103 days before the miles lapse on March 1.
+        await using var tracker = await Tracker.StartAsync("2026-11-18 10:00");
+        await tracker.PersonAsync();
+        await tracker.Balances.ImportAsync(
+            Udaan.Ok("alex-aa", "aa", "alex", 45_210, "2026-11-18T12:00:00+00:00", expires: "2027-03-01"), Ct);
+
+        Assert.Equal(0, await tracker.Reminders.RunAsync(Ct));
+
+        tracker.Clock.Set("2026-12-01 10:00");
+        Assert.Equal(1, await tracker.Reminders.RunAsync(Ct));
+        Assert.Equal(0, await tracker.Reminders.RunAsync(Ct));
+
+        tracker.Clock.Set("2027-01-30 10:00");
+        Assert.Equal(1, await tracker.Reminders.RunAsync(Ct));
+        Assert.Equal(0, await tracker.Reminders.RunAsync(Ct));
+
+        Assert.Equal(2, tracker.Notifier.Sent.Count);
+        var first = tracker.Notifier.Sent[0];
+        Assert.Equal("Miles expire soon: American AAdvantage (Alex)", first.Subject);
+        Assert.Contains("- American AAdvantage (Alex): 45,210 expire Mar 1, 2027 (90 days)", first.Body);
+        Assert.Contains("(30 days)", tracker.Notifier.Sent[1].Body);
+    }
+
+    [Fact]
+    public async Task Miles_whose_last_day_moved_out_are_left_alone_until_the_new_day_comes_near()
+    {
+        await using var tracker = await Tracker.StartAsync("2026-12-01 10:00");
+        var alex = await tracker.PersonAsync();
+        await tracker.Balances.RecordAsync(new RecordBalanceRequest(alex.Id, "Avios", 9_000, DateOnly.Parse("2027-03-01")), Ct);
+        await tracker.Balances.RecordAsync(new RecordBalanceRequest(alex.Id, "Flying Blue", 400, DateOnly.Parse("2027-02-10")), Ct);
+        await tracker.Balances.RecordAsync(new RecordBalanceRequest(alex.Id, "No date", 400, null), Ct);
+        Assert.Equal(1, await tracker.Reminders.RunAsync(Ct));
+        Assert.Equal("2 miles and points balances expire soon", tracker.Notifier.Sent.Single().Subject);
+
+        // A flight credited the next day, and the program pushed the day out by two years.
+        tracker.Clock.Set("2026-12-02 10:00");
+        await tracker.Balances.RecordAsync(new RecordBalanceRequest(alex.Id, "Avios", 9_500, DateOnly.Parse("2028-12-02")), Ct);
+
+        tracker.Clock.Set("2027-01-30 10:00");
+        Assert.Equal(1, await tracker.Reminders.RunAsync(Ct));
+        var second = tracker.Notifier.Sent[1];
+        Assert.Equal("Miles expire soon: Flying Blue (Alex)", second.Subject);
+        Assert.DoesNotContain("Avios", second.Body);
+
+        // A Sunday, before the digest goes out.
+        tracker.Clock.Set("2028-09-03 08:00");
+        Assert.Equal(1, await tracker.Reminders.RunAsync(Ct));
+        Assert.Contains("- Avios (Alex): 9,500 expire Dec 2, 2028 (90 days)", tracker.Notifier.Sent[2].Body);
+    }
+
+    [Fact]
+    public async Task The_weekly_digest_lists_miles_that_lapse_in_the_next_ninety_days()
+    {
+        // Sunday morning, after the first reminder for these miles already went out.
+        await using var tracker = await Tracker.StartAsync("2026-11-07 20:00");
+        var alex = await tracker.PersonAsync();
+        await tracker.Balances.RecordAsync(new RecordBalanceRequest(alex.Id, "Avios", 9_000, DateOnly.Parse("2027-01-15")), Ct);
+        await tracker.Balances.RecordAsync(new RecordBalanceRequest(alex.Id, "Flying Blue", 400, DateOnly.Parse("2027-06-30")), Ct);
+        Assert.Equal(1, await tracker.Reminders.RunAsync(Ct));
+
+        tracker.Clock.Set("2026-11-08 09:00");
+        Assert.Equal(1, await tracker.Reminders.RunAsync(Ct));
+
+        var digest = tracker.Notifier.Sent[1];
+        Assert.Contains("Miles and points that lapse in the next 90 days:", digest.Body);
+        Assert.Contains("- Avios (Alex): 9,000 expire Jan 15, 2027 (68 days)", digest.Body);
+        Assert.DoesNotContain("Flying Blue", digest.Body);
     }
 }

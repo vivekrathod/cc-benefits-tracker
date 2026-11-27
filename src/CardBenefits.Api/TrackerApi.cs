@@ -1,4 +1,5 @@
 using CardBenefits.Application;
+using CardBenefits.Application.Balances;
 using CardBenefits.Application.Cards;
 using CardBenefits.Application.Matching;
 using CardBenefits.Application.Ports;
@@ -16,6 +17,7 @@ namespace CardBenefits.Api;
 internal static class TrackerApi
 {
     private const int LargestStatementBytes = 5 * 1024 * 1024;
+    private const int LargestBalanceReportBytes = 1024 * 1024;
 
     public static void MapTrackerApi(this IEndpointRouteBuilder app)
     {
@@ -143,6 +145,31 @@ internal static class TrackerApi
             }
 
             return ToDto(catalog.Status, refresher);
+        });
+
+        // Miles and points
+        api.MapGet("/balances", (TrackerQueries queries, CancellationToken ct) => queries.GetBalancesAsync(ct));
+        api.MapPost("/balances", async (RecordBalanceRequest request, BalanceService balances, CancellationToken ct) =>
+        {
+            await balances.RecordAsync(request, ct);
+            return Results.NoContent();
+        });
+        api.MapDelete("/balances", async (Guid personId, string program, BalanceService balances, CancellationToken ct) =>
+        {
+            await balances.RemoveAsync(personId, program, ct);
+            return Results.NoContent();
+        });
+        api.MapPost("/balances/udaan", async (HttpRequest request, BalanceService balances, CancellationToken ct) =>
+        {
+            // The body is what "udaan check" printed, as it is. One address serves every account:
+            // each result says whose it is.
+            if (request.ContentLength > LargestBalanceReportBytes)
+            {
+                throw new RequestRejectedException("The result is larger than 1 MB.");
+            }
+
+            using var reader = new StreamReader(request.Body);
+            return Results.Ok(await balances.ImportAsync(await reader.ReadToEndAsync(ct), ct));
         });
 
         // Sync

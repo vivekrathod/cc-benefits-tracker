@@ -217,8 +217,8 @@ internal sealed class ReminderRow
 }
 
 /// <summary>
-/// Reserved for phase 2 (points). A balance is a dated snapshot with where it came
-/// from: automation, manual or estimate. Nothing writes to it in v1.
+/// One reading of a person's balance in a loyalty program. Readings are only ever added,
+/// and the newest per person and program is the balance.
 /// </summary>
 internal sealed class BalanceSnapshotRow
 {
@@ -232,5 +232,23 @@ internal sealed class BalanceSnapshotRow
 
     public DateTimeOffset AsOf { get; set; }
 
-    public string Source { get; set; } = "";
+    public BalanceSource Source { get; set; }
+
+    public DateOnly? ExpiresOn { get; set; }
+}
+
+/// <summary>How the latest automatic check of one account went, keyed by the automation's name for the account.</summary>
+internal sealed class BalanceCheckRow
+{
+    public string Account { get; set; } = "";
+
+    public string Owner { get; set; } = "";
+
+    public string Program { get; set; } = "";
+
+    public BalanceCheckStatus Status { get; set; }
+
+    public string? Problem { get; set; }
+
+    public DateTimeOffset CheckedAt { get; set; }
 }

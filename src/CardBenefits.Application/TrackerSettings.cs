@@ -24,6 +24,9 @@ public sealed record TrackerSettings
 
     public IReadOnlyList<int> NudgeDaysBefore { get; init; } = [7, 2];
 
+    /// <summary>Miles lapse rarely and take planning to save, so their reminders start much earlier.</summary>
+    public IReadOnlyList<int> BalanceNudgeDaysBefore { get; init; } = [90, 30];
+
     public DayOfWeek DigestDay { get; init; } = DayOfWeek.Sunday;
 
     public TimeOnly DigestAt { get; init; } = new(9, 0);

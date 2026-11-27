@@ -94,6 +94,20 @@ public interface ITrackerStore
 
     Task ForgetReminderAsync(string key, CancellationToken cancellationToken);
 
+    // Miles and points
+    /// <summary>The newest reading of every balance, one per person and program.</summary>
+    Task<IReadOnlyList<ProgramBalance>> GetLatestBalancesAsync(CancellationToken cancellationToken);
+
+    Task AddBalanceAsync(ProgramBalance balance, CancellationToken cancellationToken);
+
+    /// <summary>Removes every reading of one person's balance in one program.</summary>
+    Task DeleteBalancesAsync(Guid personId, string program, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<BalanceCheck>> GetBalanceChecksAsync(CancellationToken cancellationToken);
+
+    /// <summary>Saves how the latest check of an account went, replacing what was stored for that account.</summary>
+    Task SaveBalanceCheckAsync(BalanceCheck check, CancellationToken cancellationToken);
+
     /// <summary>Writes a consistent copy of the whole database to a file.</summary>
     Task BackupAsync(string path, CancellationToken cancellationToken);
 }

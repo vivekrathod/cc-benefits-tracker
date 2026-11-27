@@ -174,15 +174,64 @@ public sealed class TrackerQueries(ITrackerStore store, ICatalog catalog, IClock
             runs.Take(20).Select(ToDto).ToArray());
     }
 
+    /// <summary>
+    /// Every person's miles and points as last read, soonest to lapse first within a person,
+    /// with how the automatic checks are doing: the ones that need a look come first.
+    /// </summary>
+    public async Task<BalancesDto> GetBalancesAsync(CancellationToken cancellationToken)
+    {
+        var today = clock.Today;
+        var people = (await store.GetPeopleAsync(cancellationToken)).ToDictionary(person => person.Id, person => person.Name);
+        var warnFrom = settings.BalanceNudgeDaysBefore.DefaultIfEmpty(0).Max();
+
+        var balances = (await store.GetLatestBalancesAsync(cancellationToken))
+            .Select(balance =>
+            {
+                var days = balance.DaysUntilExpiry(today);
+                return new BalanceDto(
+                    balance.PersonId,
+                    people.GetValueOrDefault(balance.PersonId) ?? "",
+                    balance.Program,
+                    balance.Amount,
+                    clock.ToLocal(balance.AsOf),
+                    today.DayNumber - clock.ToLocalDate(balance.AsOf).DayNumber,
+                    balance.Source.ToString(),
+                    balance.ExpiresOn,
+                    days,
+                    days <= warnFrom);
+            })
+            .OrderBy(balance => balance.PersonName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(balance => balance.DaysUntilExpiry ?? int.MaxValue)
+            .ThenBy(balance => balance.Program, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        var checks = (await store.GetBalanceChecksAsync(cancellationToken))
+            .OrderBy(check => !check.NeedsAttention)
+            .ThenBy(check => check.Account, StringComparer.OrdinalIgnoreCase)
+            .Select(check => new BalanceCheckDto(
+                check.Account, check.Owner, check.Program, check.Status.ToString(), check.Problem, clock.ToLocal(check.CheckedAt)))
+            .ToArray();
+
+        return new BalancesDto(balances, checks);
+    }
+
     public async Task<SummaryDto> GetSummaryAsync(string liveFeedName, CancellationToken cancellationToken)
     {
         var health = await GetSyncHealthAsync(liveFeedName, true, null, cancellationToken);
         var accounts = await store.GetFeedAccountsAsync(cancellationToken);
+        var today = clock.Today;
+
+        // Miles count with the benefits once they are inside the same window.
+        var lapsing = (await store.GetLatestBalancesAsync(cancellationToken))
+            .Count(balance => balance.DaysUntilExpiry(today) is { } days && days >= 0 && days <= settings.ExpiringSoonDays);
+        var failingChecks = (await store.GetBalanceChecksAsync(cancellationToken)).Count(check => check.NeedsAttention);
+
         return new SummaryDto(
-            (await GetExpiringSoonAsync(null, cancellationToken)).Count,
+            (await GetExpiringSoonAsync(null, cancellationToken)).Count + lapsing,
             (await store.GetReviewItemsAsync(cancellationToken)).Count,
             accounts.Count(account => account.Status == FeedAccountStatus.New),
-            health.Connections.Count(connection => connection.LastError is not null) + (health.LastFailure is null ? 0 : 1));
+            health.Connections.Count(connection => connection.LastError is not null) + (health.LastFailure is null ? 0 : 1),
+            failingChecks);
     }
 
     public SyncRunDto ToDto(SyncRun run) => new(

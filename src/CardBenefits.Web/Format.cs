@@ -24,6 +24,35 @@ internal static class Format
         _ => $"{days} days left",
     };
 
+    /// <summary>A count of miles or points.</summary>
+    public static string Count(long amount) => amount.ToString("#,0", CultureInfo.InvariantCulture);
+
+    public static string Age(int days) => days switch
+    {
+        <= 0 => "today",
+        1 => "yesterday",
+        _ => $"{days} days ago",
+    };
+
+    public static string UntilExpiry(int days) => days switch
+    {
+        < 0 => "expired",
+        0 => "expire today",
+        1 => "expire tomorrow",
+        _ => $"expire in {days} days",
+    };
+
+    /// <summary>A balance check's status in plain words.</summary>
+    public static string CheckStatus(string status) => status switch
+    {
+        "Ok" => "ok",
+        "NeedsUser" => "needs you",
+        "Blocked" => "blocked by the site",
+        "UnknownOwner" => "unknown owner",
+        "UnknownProgram" => "unknown program",
+        _ => "failed",
+    };
+
     public static string Month(int month) => CultureInfo.InvariantCulture.DateTimeFormat.GetAbbreviatedMonthName(month);
 
     /// <summary>What the API said, or a plain line when the server could not be reached at all.</summary>
