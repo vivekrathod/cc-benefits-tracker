@@ -20,5 +20,5 @@ jobs:
       - run: dotnet build --no-restore --configuration Release
       - run: dotnet test --no-build --configuration Release
       # The web app is only wired up correctly if the published output can start it.
-      - run: dotnet publish src/CardBenefits.Api --configuration Release --output out
+      - run: dotnet publish src/Chitragupta.Api --configuration Release --output out
       - run: test -f out/wwwroot/_framework/blazor.webassembly.js && grep -q '_framework/blazor.webassembly.js' out/wwwroot/index.html

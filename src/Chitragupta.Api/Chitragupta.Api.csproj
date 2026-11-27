@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <ProjectReference Include="..\Chitragupta.Application\Chitragupta.Application.csproj" />
+    <ProjectReference Include="..\Chitragupta.Contracts\Chitragupta.Contracts.csproj" />
+    <ProjectReference Include="..\Chitragupta.Infrastructure\Chitragupta.Infrastructure.csproj" />
+    <ProjectReference Include="..\Chitragupta.Web\Chitragupta.Web.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" />
+  </ItemGroup>
+</Project>

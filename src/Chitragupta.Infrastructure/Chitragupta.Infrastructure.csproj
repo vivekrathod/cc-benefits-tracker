@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\Chitragupta.Application\Chitragupta.Application.csproj" />
+    <ProjectReference Include="..\Chitragupta.Domain\Chitragupta.Domain.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\catalog\catalog.json" LogicalName="catalog.json" />
+    <EmbeddedResource Include="..\..\catalog\overrides.json" LogicalName="catalog-overrides.json" />
+    <InternalsVisibleTo Include="Chitragupta.Infrastructure.Tests" />
+  </ItemGroup>
+</Project>

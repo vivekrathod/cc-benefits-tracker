@@ -141,3 +141,15 @@ Short notes on the choices that are not obvious from the code, newest concerns f
 - **Reminders are recorded when sent**, so a nudge goes out once per threshold; a
   failed send is forgotten and retried.
 - **Logs carry counts and status**, not descriptions or amounts.
+
+## Names
+
+- **Chitragupta is the name everywhere a person types or reads it**: the repository, the
+  solution and its projects, the Docker image and service, the `chitragupta` command, the
+  `Chitragupta` settings section and the `CHITRAGUPTA_*` variables in `.env`.
+- **The word "tracker" stays inside.** Class names such as `TrackerQueries` say what the
+  code does, not what the product is called. The database file is still `tracker.db` and
+  the nightly copies are still `tracker-<date>.db`: renaming a household's data gains
+  nothing and is the one rename that could lose something.
+- **The balance runner is `tools/check-balances.sh`**, named for what it does and not for
+  the kind of balance. It runs whatever accounts udaan lists, miles or points.

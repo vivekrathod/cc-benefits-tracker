@@ -1,0 +1,19 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Chitragupta.Api/Chitragupta.Api.csproj" />
+    <Project Path="src/Chitragupta.Application/Chitragupta.Application.csproj" />
+    <Project Path="src/Chitragupta.Contracts/Chitragupta.Contracts.csproj" />
+    <Project Path="src/Chitragupta.Domain/Chitragupta.Domain.csproj" />
+    <Project Path="src/Chitragupta.Infrastructure/Chitragupta.Infrastructure.csproj" />
+    <Project Path="src/Chitragupta.Web/Chitragupta.Web.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Chitragupta.Cli/Chitragupta.Cli.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Chitragupta.Api.Tests/Chitragupta.Api.Tests.csproj" />
+    <Project Path="tests/Chitragupta.Application.Tests/Chitragupta.Application.Tests.csproj" />
+    <Project Path="tests/Chitragupta.Domain.Tests/Chitragupta.Domain.Tests.csproj" />
+    <Project Path="tests/Chitragupta.Infrastructure.Tests/Chitragupta.Infrastructure.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\Chitragupta.Contracts\Chitragupta.Contracts.csproj" />
+    <ProjectReference Include="..\Chitragupta.Domain\Chitragupta.Domain.csproj" />
+  </ItemGroup>
+</Project>

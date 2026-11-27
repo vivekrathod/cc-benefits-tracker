@@ -481,7 +481,7 @@ $RECYCLE.BIN/
 # Vim temporary swap files
 *.swp
 
-# Card Benefits Tracker: real data never belongs in this repository
+# Chitragupta: real data never belongs in this repository
 *.db
 *.db-shm
 *.db-wal

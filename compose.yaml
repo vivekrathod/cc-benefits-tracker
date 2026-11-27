@@ -1,24 +1,24 @@
 # Copy .env.example to .env, adjust it, then: docker compose up -d --build
 services:
-  tracker:
+  chitragupta:
     build: .
-    image: card-benefits-tracker
+    image: chitragupta
     restart: unless-stopped
     # Run as the host user that owns the data and secrets folders (id -u, id -g).
-    user: "${TRACKER_UID:-1000}:${TRACKER_GID:-1000}"
+    user: "${CHITRAGUPTA_UID:-1000}:${CHITRAGUPTA_GID:-1000}"
     ports:
-      - "${TRACKER_PORT:-8080}:8080"
+      - "${CHITRAGUPTA_PORT:-8080}:8080"
     environment:
-      Tracker__TimeZone: ${TRACKER_TIMEZONE:-America/New_York}
+      Chitragupta__TimeZone: ${CHITRAGUPTA_TIMEZONE:-America/New_York}
       # Files, not values: the access URL and the mail password never appear in configuration.
-      Tracker__SimpleFin__AccessUrlFile: /run/secrets/simplefin-access-url
-      Tracker__Smtp__PasswordFile: /run/secrets/smtp-password
-      Tracker__Smtp__Host: ${SMTP_HOST:-}
-      Tracker__Smtp__Port: ${SMTP_PORT:-587}
-      Tracker__Smtp__User: ${SMTP_USER:-}
-      Tracker__Smtp__From: ${SMTP_FROM:-}
-      Tracker__Smtp__To__0: ${REMINDER_TO_1:-}
-      Tracker__Smtp__To__1: ${REMINDER_TO_2:-}
+      Chitragupta__SimpleFin__AccessUrlFile: /run/secrets/simplefin-access-url
+      Chitragupta__Smtp__PasswordFile: /run/secrets/smtp-password
+      Chitragupta__Smtp__Host: ${SMTP_HOST:-}
+      Chitragupta__Smtp__Port: ${SMTP_PORT:-587}
+      Chitragupta__Smtp__User: ${SMTP_USER:-}
+      Chitragupta__Smtp__From: ${SMTP_FROM:-}
+      Chitragupta__Smtp__To__0: ${REMINDER_TO_1:-}
+      Chitragupta__Smtp__To__1: ${REMINDER_TO_2:-}
     volumes:
-      - ${TRACKER_DATA:-./data}:/data
-      - ${TRACKER_SECRETS:-./secrets}:/run/secrets:ro
+      - ${CHITRAGUPTA_DATA:-./data}:/data
+      - ${CHITRAGUPTA_SECRETS:-./secrets}:/run/secrets:ro

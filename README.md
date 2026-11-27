@@ -5,8 +5,7 @@ used, which are left, and which are about to expire, with as little manual entry
 the data allows.
 
 It is named after Chitragupta, the record keeper of Hindu tradition who keeps the
-account of every deed. The repository, the container and the commands keep their
-working names (`cc-benefits-tracker`, `tracker`).
+account of every deed.
 
 Issuers do not publish a "benefits used" feed, so usage is inferred. When a benefit is
 used, the issuer posts a statement credit on the card a few days later. The service
@@ -32,8 +31,8 @@ The web app is installable on a phone (Add to Home Screen). It keeps a copy of i
 You need Docker, and a folder outside any git checkout for data and secrets.
 
 ```sh
-cp .env.example .env          # set TRACKER_UID/GID (id -u, id -g), folders, time zone
-mkdir -p data secrets         # or wherever TRACKER_DATA and TRACKER_SECRETS point
+cp .env.example .env          # set CHITRAGUPTA_UID/GID (id -u, id -g), folders, time zone
+mkdir -p data secrets         # or wherever CHITRAGUPTA_DATA and CHITRAGUPTA_SECRETS point
 docker compose up -d --build
 ```
 
@@ -48,8 +47,8 @@ Tailscale; do not expose the port to the internet.
 2. Claim it. The access URL is written to the secrets folder and never shown:
 
    ```sh
-   docker compose run --rm -T -v "$PWD/secrets:/out" --entrypoint dotnet tracker \
-     cli/tracker.dll claim /out/simplefin-access-url < token.txt
+   docker compose run --rm -T -v "$PWD/secrets:/out" --entrypoint dotnet chitragupta \
+     cli/chitragupta.dll claim /out/simplefin-access-url < token.txt
    ```
 
    Any other way of producing the file works too: it holds the access URL on one line,
@@ -76,7 +75,7 @@ configuration, not in the database, not in logs, and error messages never quote 
 People and cards can also be loaded from a seed file:
 
 ```sh
-docker compose exec tracker dotnet cli/tracker.dll import-cards /data/cards.json
+docker compose exec chitragupta dotnet cli/chitragupta.dll import-cards /data/cards.json
 ```
 
 ```json
@@ -117,13 +116,13 @@ while only one person has it; an owner nobody goes by waits on the Points screen
 creates a person. Sending the same result again changes nothing, and a failed check keeps
 the last balance and shows what went wrong.
 
-`tools/udaan-balances.sh` does this for every account udaan knows, one account at a time
+`tools/check-balances.sh` does this for every account udaan knows, one account at a time
 with a pause after each live sign-in, and keeps two accounts of the same program apart.
 Run it once a day on the machine that has udaan:
 
 ```
 # crontab: every morning at 7:10
-10 7 * * * TRACKER_URL=http://localhost:8080 /path/to/tools/udaan-balances.sh >> ~/udaan-balances.log 2>&1
+10 7 * * * CHITRAGUPTA_URL=http://localhost:8080 /path/to/tools/check-balances.sh >> ~/chitragupta-balances.log 2>&1
 ```
 
 Programs udaan knows that the tracker can read: American AAdvantage, Alaska Atmos Rewards
@@ -132,7 +131,7 @@ window, and reminders go out 90 and 30 days before.
 
 ### Settings
 
-Everything is under the `Tracker` section (`Tracker__Name` as an environment variable).
+Everything is under the `Chitragupta` section (`Chitragupta__Name` as an environment variable).
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
@@ -153,39 +152,39 @@ Everything is under the `Tracker` section (`Tracker__Name` as an environment var
 
 ## Operator CLI
 
-`tracker` prints counts and status, never transaction details or secrets.
+`chitragupta` prints counts and status, never transaction details or secrets.
 
 ```
-tracker status | cards | replay | sync | catalog
-tracker backup <name>                      (a copy in backups/, safe while the service runs)
-tracker import-cards <seed.json>
-tracker import-csv <card id or last four> <file.csv>
-tracker import-pull <saved-simplefin-response.json>
-tracker link-suggested
-tracker claim <access-url-file>            (setup token on standard input)
-tracker import-catalog <dataset.json> <catalog.json>
+chitragupta status | cards | replay | sync | catalog
+chitragupta backup <name>                      (a copy in backups/, safe while the service runs)
+chitragupta import-cards <seed.json>
+chitragupta import-csv <card id or last four> <file.csv>
+chitragupta import-pull <saved-simplefin-response.json>
+chitragupta link-suggested
+chitragupta claim <access-url-file>            (setup token on standard input)
+chitragupta import-catalog <dataset.json> <catalog.json>
 ```
 
-In the container: `docker compose exec tracker dotnet cli/tracker.dll <command>`.
+In the container: `docker compose exec chitragupta dotnet cli/chitragupta.dll <command>`.
 
-Take a copy of the database with `tracker backup`, inside the container, or stop the
+Take a copy of the database with `chitragupta backup`, inside the container, or stop the
 container first. Do not open or copy `tracker.db` from the host while the container
 runs: the host cannot see the container's locks, and SQLite can then drop what the
 service wrote last.
-From a checkout: `dotnet run --project tools/CardBenefits.Cli -- <command> --data <folder>`.
+From a checkout: `dotnet run --project tools/Chitragupta.Cli -- <command> --data <folder>`.
 
 ## How it is built
 
 .NET 10, ASP.NET Core minimal API, EF Core on SQLite, Blazor WebAssembly, xUnit.
 
 ```
-src/CardBenefits.Domain          periods, cards, the matcher. No dependencies.
-src/CardBenefits.Application     use cases and ports (feed, store, catalog, clock, notifier)
-src/CardBenefits.Contracts       the records the API returns and accepts
-src/CardBenefits.Infrastructure  SQLite store, SimpleFIN and CSV feeds, catalog, email
-src/CardBenefits.Api             composition root, HTTP routes, the daily worker
-src/CardBenefits.Web             the web app, served by the API
-tools/CardBenefits.Cli           the operator CLI
+src/Chitragupta.Domain          periods, cards, the matcher. No dependencies.
+src/Chitragupta.Application     use cases and ports (feed, store, catalog, clock, notifier)
+src/Chitragupta.Contracts       the records the API returns and accepts
+src/Chitragupta.Infrastructure  SQLite store, SimpleFIN and CSV feeds, catalog, email
+src/Chitragupta.Api             composition root, HTTP routes, the daily worker
+src/Chitragupta.Web             the web app, served by the API
+tools/Chitragupta.Cli           the operator CLI
 catalog/                         the source's card products and benefits, and this project's corrections
 ```
 
@@ -196,7 +195,7 @@ design choices is in [docs/decisions.md](docs/decisions.md).
 
 ```sh
 dotnet test          # everything
-dotnet run --project src/CardBenefits.Api
+dotnet run --project src/Chitragupta.Api
 ```
 
 The use-case tests run on a real SQLite file with only the feed, the clock and the
@@ -227,7 +226,7 @@ see `catalog/NOTICE.md`), and the tracker stays in step with it:
   converts it, lays the corrections on top and replays the matching if anything
   changed. The copy is kept in `catalog-source.json` in the data folder. "Sync health"
   shows when it was last fetched and has a button to do it now.
-- **A refresh flags what needs a person**, on "Sync health" and in `tracker catalog`: a
+- **A refresh flags what needs a person**, on "Sync health" and in `chitragupta catalog`: a
   correction whose source row has changed or gone since it was written (the correction
   still wins), and anything kept after the source dropped it.
 - **A refresh never takes anything from a card.** A product the source dropped stays

@@ -2,7 +2,7 @@
 
 `catalog.json` is a conversion of the community dataset at
 https://github.com/tiepnv2508/us-credit-card-benefits (file `exports/benefits.json`),
-made with `tracker import-catalog`. It is never edited by hand: the product names and
+made with `chitragupta import-catalog`. It is never edited by hand: the product names and
 ids are the dataset's, and the running tracker replaces it with a newer conversion of
 the same dataset every week. The dataset is published under the MIT licence,
 reproduced below as that licence requires.
