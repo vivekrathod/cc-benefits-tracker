@@ -21,11 +21,29 @@ internal sealed class BalanceCheckWorker(
             return;
         }
 
+        var answering = true;
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                if (await runner.RunDueAsync(stoppingToken) is { } run)
+                var run = await runner.RunDueAsync(stoppingToken);
+
+                // Said once each way, so an outage is one line in the log and not one a minute.
+                var known = state.Read();
+                if (answering != known.UnreachableSince is null)
+                {
+                    answering = !answering;
+                    if (answering)
+                    {
+                        logger.LogInformation("The balance automation answers again, with {Accounts} accounts.", known.Accounts.Count);
+                    }
+                    else
+                    {
+                        logger.LogWarning("The balance automation is not answering: {Problem}", known.Problem);
+                    }
+                }
+
+                if (run is not null)
                 {
                     // A program and a status. Whose account it was stays out of the log.
                     logger.LogInformation(
