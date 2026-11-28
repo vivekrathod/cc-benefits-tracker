@@ -86,8 +86,8 @@ public sealed class ReminderOptions
 public sealed class GmailOptions
 {
     /// <summary>
-    /// A file holding a send-only Gmail token, as "udaan gmail-login --send" writes it. While the
-    /// file exists, reminders go this way. The token can send as the account and can read nothing.
+    /// A file holding a Gmail token that may send, as "udaan gmail-login --send" writes it. While
+    /// it holds one, reminders go this way.
     /// </summary>
     public string? TokenFile { get; set; }
 }
