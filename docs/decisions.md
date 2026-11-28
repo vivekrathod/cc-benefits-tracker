@@ -99,13 +99,9 @@ Short notes on the choices that are not obvious from the code, newest concerns f
   that repeats daily is one email, then one more if it lasts two days, then one when it
   clears. Alerts are plain rules over the history. Nothing with judgement sits between a
   failure and the email about it.
-- **Reminders go through the Gmail API with the token udaan already keeps.** One sign-in,
-  one file, in udaan's own folder: the service is shown that file read-only instead of
-  holding a second token. The cost is known: that token can read mail too, and the
-  container can see it. The service sends its own mail instead of asking udaan to, because
-  the message that udaan is down must not need udaan. The way out is picked when a reminder
-  is sent, and a token that may not send yet is left alone, so approving it takes effect
-  without a restart.
+- **Reminders go through the Gmail API with a token that can only send.** No password is
+  stored, and the token cannot read mail. The way out is picked when a reminder is sent,
+  so signing in takes effect without a restart.
 - **An owner is matched to a person by name**, whole or first, and only when exactly one
   person fits. Anyone else waits: a result never creates a person, as a feed account
   never creates a card.

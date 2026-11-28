@@ -12,13 +12,8 @@ public sealed class GmailNotifierTests : IDisposable
 {
     private const string Token = """
         { "token": "old-access", "refresh_token": "made-up-refresh", "token_uri": "https://oauth2.example/token",
-          "client_id": "made-up-client", "client_secret": "made-up-secret", "scopes": ["https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/gmail.send"],
+          "client_id": "made-up-client", "client_secret": "made-up-secret", "scopes": ["https://www.googleapis.com/auth/gmail.send"],
           "account": "home@example.com", "expiry": "2026-11-27T00:00:00Z" }
-        """;
-
-    private const string ReadOnlyToken = """
-        { "refresh_token": "made-up-refresh", "client_id": "made-up-client", "client_secret": "made-up-secret",
-          "scopes": ["https://www.googleapis.com/auth/gmail.readonly"] }
         """;
 
     private readonly TempFolder _folder = new();
@@ -98,24 +93,7 @@ public sealed class GmailNotifierTests : IDisposable
     [Fact]
     public async Task Reminders_go_through_gmail_from_the_moment_its_token_file_is_there()
     {
-        var file = Path.Combine(_folder.Path, "gmail-token.json");
-        var gmail = new GmailNotifier(_google.Client(), new GmailOptions { TokenFile = file }, []);
-        var notifier = new FirstReadyNotifier(gmail, null, new LogNotifier(NullLogger<LogNotifier>.Instance));
-
-        await notifier.SendAsync(new Notification("Before", "Body"), Ct);
-        Assert.Empty(_google.Requests);
-
-        File.WriteAllText(file, Token);
-        await notifier.SendAsync(new Notification("After", "Body"), Ct);
-        Assert.Equal(2, _google.Requests.Count);
-    }
-
-    [Theory]
-    [InlineData(ReadOnlyToken)] // the token udaan reads codes with, before it was approved for sending
-    [InlineData("")] // what the service sees when no token file was named
-    public async Task A_token_that_may_not_send_is_left_alone_until_it_may(string saved)
-    {
-        var file = _folder.Write("gmail-token.json", saved);
+        var file = Path.Combine(_folder.Path, "gmail-send-token.json");
         var gmail = new GmailNotifier(_google.Client(), new GmailOptions { TokenFile = file }, []);
         var notifier = new FirstReadyNotifier(gmail, null, new LogNotifier(NullLogger<LogNotifier>.Instance));
 
@@ -128,7 +106,7 @@ public sealed class GmailNotifierTests : IDisposable
     }
 
     private GmailNotifier Notifier(StubHttp google, string[] recipients) =>
-        new(google.Client(), new GmailOptions { TokenFile = _folder.Write("gmail-token.json", Token) }, recipients);
+        new(google.Client(), new GmailOptions { TokenFile = _folder.Write("gmail-send-token.json", Token) }, recipients);
 
     private static string Decode(string sendBody)
     {

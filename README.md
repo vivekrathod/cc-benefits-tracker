@@ -98,12 +98,10 @@ Sunday morning. An alert goes out when an automatic balance check needs somebody
 
 Reminders go out the first way that is set up:
 
-1. **Gmail.** Set `GMAIL_TOKEN_FILE` in `.env` to the full path of a Gmail token that may
-   send. With udaan there is nothing to copy: it already keeps one token for reading sign-in
-   codes, and `udaan gmail-login --send` approves that same token for sending with a single
-   consent click. Its file is `~/.config/udaan/gmail-token.json`. The service is shown that
-   one file, read-only, and only ever sends with it. Until the token may send, reminders go
-   the next way; once it may, it is picked up without a restart.
+1. **Gmail.** Put a send-only Gmail token in the secrets folder as `gmail-send-token.json`.
+   udaan makes one with a single consent click:
+   `udaan gmail-login --send --email you@gmail.com --out <secrets>/gmail-send-token.json`.
+   The token can send as that account and can read nothing. It is picked up without a restart.
 2. **SMTP.** Set the `SMTP_*` values in `.env` and put the password in `secrets/smtp-password`.
 3. **The log**, when neither is set up.
 
@@ -191,7 +189,7 @@ Everything is under the `Chitragupta` section (`Chitragupta__Name` as an environ
 | `Reminders:BalanceNudgeDaysBefore` | `90, 30` | Days before miles or points lapse |
 | `Reminders:DigestDay`, `DigestAt` | `Sunday`, `09:00` | Weekly digest |
 | `Reminders:To` | none | Who reminders are written to |
-| `Gmail:TokenFile` | none | A Gmail token that may send; reminders go this way while the file holds one |
+| `Gmail:TokenFile` | none | A send-only Gmail token; reminders go this way while the file exists |
 | `Smtp:Host`, `Port`, `User`, `PasswordFile`, `From` | none | Reminders by SMTP |
 | `Udaan:Url`, `TokenFile` | none | Where `udaan serve` answers, and the file holding its token |
 | `Balances:DailyAt` | `12:30` | From when each account is checked once a day |

@@ -14,9 +14,8 @@ services:
       Chitragupta__SimpleFin__AccessUrlFile: /run/secrets/simplefin-access-url
       Chitragupta__Reminders__To__0: ${REMINDER_TO_1:-}
       Chitragupta__Reminders__To__1: ${REMINDER_TO_2:-}
-      # Reminders go through Gmail from the moment this file holds a token that may send, else by SMTP when a
-      # host is set, else to the log.
-      Chitragupta__Gmail__TokenFile: /run/gmail-token.json
+      # Reminders go through Gmail from the moment this file exists, else by SMTP when a host is set, else to the log.
+      Chitragupta__Gmail__TokenFile: /run/secrets/gmail-send-token.json
       Chitragupta__Smtp__PasswordFile: /run/secrets/smtp-password
       Chitragupta__Smtp__Host: ${SMTP_HOST:-}
       Chitragupta__Smtp__Port: ${SMTP_PORT:-587}
@@ -32,5 +31,3 @@ services:
     volumes:
       - ${CHITRAGUPTA_DATA:-./data}:/data
       - ${CHITRAGUPTA_SECRETS:-./secrets}:/run/secrets:ro
-      # The one Gmail token, where the tool that made it keeps it. Not named, the service sees an empty file.
-      - ${GMAIL_TOKEN_FILE:-/dev/null}:/run/gmail-token.json:ro

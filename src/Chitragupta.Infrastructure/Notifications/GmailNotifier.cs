@@ -8,9 +8,8 @@ namespace Chitragupta.Infrastructure.Notifications;
 
 /// <summary>
 /// Reminders through the Gmail API, sent as the account that approved it. The token file is the
-/// one "udaan gmail-login --send" writes, and stays where udaan keeps it: the service is shown
-/// that file and only ever sends with it. It is read each time, so a new sign-in takes effect
-/// without a restart, and nothing from it is ever logged.
+/// one "udaan gmail-login --send" writes: it can send and can read nothing. It is read each time,
+/// so a new sign-in takes effect without a restart, and nothing from it is ever logged.
 /// </summary>
 internal sealed class GmailNotifier(HttpClient http, GmailOptions options, IReadOnlyList<string> recipients) : INotifier
 {
@@ -21,8 +20,8 @@ internal sealed class GmailNotifier(HttpClient http, GmailOptions options, IRead
     private string? _accessTokenFor;
     private DateTimeOffset _accessTokenUntil;
 
-    /// <summary>True once the token file holds a token that may send. Until then reminders go another way.</summary>
-    public bool IsReady => SavedToken.MaySend(options.TokenFile);
+    /// <summary>True once the token file is there. Until then reminders go another way.</summary>
+    public bool IsReady => !string.IsNullOrWhiteSpace(options.TokenFile) && File.Exists(options.TokenFile);
 
     public async Task SendAsync(Notification notification, CancellationToken cancellationToken)
     {
@@ -31,7 +30,7 @@ internal sealed class GmailNotifier(HttpClient http, GmailOptions options, IRead
         if (to.Count == 0)
         {
             throw new InvalidOperationException(
-                "There is no address to send reminders to. Set REMINDER_TO_1, or sign in again with \"udaan gmail-login --send\".");
+                "There is no address to send reminders to. Set REMINDER_TO_1, or sign in again with \"udaan gmail-login --send --email <address>\".");
         }
 
         var access = await AccessTokenAsync(token, cancellationToken);
@@ -105,40 +104,6 @@ internal sealed class GmailNotifier(HttpClient http, GmailOptions options, IRead
     /// <summary>The parts of google-auth's "authorized user" file that sending needs.</summary>
     private sealed record SavedToken(string RefreshToken, string ClientId, string ClientSecret, Uri TokenUrl, string? Account)
     {
-        private const string SendScope = "https://www.googleapis.com/auth/gmail.send";
-
-        /// <summary>
-        /// Whether the file holds a token approved for sending. The same file can hold one that only
-        /// reads, and an empty file is how "no token named" looks to a container. A file that cannot
-        /// be read counts as ready, so that sending says what is wrong with it.
-        /// </summary>
-        public static bool MaySend(string? file)
-        {
-            if (string.IsNullOrWhiteSpace(file) || !File.Exists(file))
-            {
-                return false;
-            }
-
-            try
-            {
-                var text = File.ReadAllText(file);
-                if (string.IsNullOrWhiteSpace(text))
-                {
-                    return false;
-                }
-
-                using var saved = JsonDocument.Parse(text);
-                return saved.RootElement.ValueKind == JsonValueKind.Object
-                    && saved.RootElement.TryGetProperty("scopes", out var scopes)
-                    && scopes.ValueKind == JsonValueKind.Array
-                    && scopes.EnumerateArray().Any(scope => scope.ValueKind == JsonValueKind.String && scope.GetString() == SendScope);
-            }
-            catch (Exception unreadable) when (unreadable is JsonException or IOException or UnauthorizedAccessException)
-            {
-                return true;
-            }
-        }
-
         public static SavedToken Read(string file)
         {
             try
