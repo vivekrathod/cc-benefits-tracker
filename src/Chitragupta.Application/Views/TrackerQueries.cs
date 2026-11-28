@@ -207,6 +207,7 @@ public sealed class TrackerQueries(
                 var latest = history.Latest;
                 var signIns = history.SignInsOn(today, clock);
                 var waiting = asked is not null && (asked.Running == latest.Account || asked.Requested.Contains(latest.Account));
+                var (waitingFor, waitingUntil) = asked is null ? default : Wait(latest.Account, asked, now);
                 return new BalanceCheckDto(
                     latest.Account, latest.Owner, latest.Program, latest.Status.ToString(), latest.Problem, clock.ToLocal(latest.CheckedAt))
                 {
@@ -217,6 +218,8 @@ public sealed class TrackerQueries(
                     RetriesItself = latest is { NeedsAttention: true, Retryable: true } || latest.Status == BalanceCheckStatus.Blocked,
                     SignInsToday = signIns,
                     Queued = waiting,
+                    WaitingFor = waitingFor,
+                    WaitingUntil = waitingUntil,
                     CanCheckNow = asked is { UnreachableSince: null }
                         && asked.Accounts.Contains(latest.Account)
                         && !waiting
@@ -268,6 +271,33 @@ public sealed class TrackerQueries(
                     asked.Running,
                     settings.BalanceCheckAt,
                     settings.BalanceSignInsPerDay));
+    }
+
+    /// <summary>What a check a person asked for is waiting for, in the order the runner looks at it.</summary>
+    private (string? For, DateTimeOffset? Until) Wait(string account, BalanceCheckerState.Snapshot asked, DateTimeOffset now)
+    {
+        if (asked.Running == account || !asked.Requested.Contains(account))
+        {
+            return default;
+        }
+
+        if (asked.Running is { } other)
+        {
+            return ($"The check of {other} is running, and only one sign-in runs at a time.", null);
+        }
+
+        if (asked.Pause is { } pause && pause.Holds(now, requested: true))
+        {
+            var why = pause.Why switch
+            {
+                BalanceWait.Busy => "A sign-in started outside the tracker is running, and only one runs at a time.",
+                BalanceWait.Trouble => "The automation's last answer could not be used, so nothing is asked of it for a quarter of an hour.",
+                _ => "The automation asked to wait.",
+            };
+            return (why, clock.ToLocal(pause.Until));
+        }
+
+        return asked.Requested[0] == account ? default : ("Another check you asked for goes first.", null);
     }
 
     private bool IsOverdue(BalanceCheck latest, DateTimeOffset now) =>

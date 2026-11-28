@@ -1,3 +1,5 @@
+using Chitragupta.Application.Ports;
+
 namespace Chitragupta.Application.Balances;
 
 /// <summary>
@@ -13,7 +15,7 @@ public sealed class BalanceCheckerState
     private IReadOnlyList<string> _accounts = [];
     private DateTimeOffset? _unreachableSince;
     private DateTimeOffset? _reachableSince;
-    private DateTimeOffset? _notBefore;
+    private BalancePause? _pause;
     private string? _problem;
     private string? _running;
 
@@ -21,7 +23,7 @@ public sealed class BalanceCheckerState
     {
         lock (_gate)
         {
-            return new Snapshot(_accounts, _requested.ToArray(), _running, _unreachableSince, _reachableSince, _notBefore, _problem);
+            return new Snapshot(_accounts, _requested.ToArray(), _running, _unreachableSince, _reachableSince, _pause, _problem);
         }
     }
 
@@ -78,22 +80,22 @@ public sealed class BalanceCheckerState
     }
 
     /// <summary>The automation said when to come back. The account stays in the queue.</summary>
-    internal void Deferred(DateTimeOffset notBefore)
+    internal void Deferred(BalancePause pause)
     {
         lock (_gate)
         {
-            (_running, _notBefore) = (null, notBefore);
+            (_running, _pause) = (null, pause);
         }
     }
 
-    internal void Finished(string account, string? problem = null, DateTimeOffset? notBefore = null)
+    internal void Finished(string account, string? problem = null, BalancePause? pause = null)
     {
         lock (_gate)
         {
             _running = null;
             _requested.Remove(account);
             _problem = problem;
-            _notBefore = notBefore ?? _notBefore;
+            _pause = pause ?? _pause;
         }
     }
 
@@ -111,6 +113,18 @@ public sealed class BalanceCheckerState
         string? Running,
         DateTimeOffset? UnreachableSince,
         DateTimeOffset? ReachableSince,
-        DateTimeOffset? NotBefore,
+        BalancePause? Pause,
         string? Problem);
+}
+
+/// <summary>Nothing is asked of the automation until a moment, for a reason.</summary>
+public sealed record BalancePause(DateTimeOffset Until, BalanceWait Why)
+{
+    /// <summary>
+    /// The time the automation lets pass between sign-ins is for checks nobody is waiting for.
+    /// Every other pause holds a check a person asked for as well.
+    /// </summary>
+    public bool HoldsRequests => Why != BalanceWait.Spacing;
+
+    public bool Holds(DateTimeOffset now, bool requested) => Until > now && (HoldsRequests || !requested);
 }

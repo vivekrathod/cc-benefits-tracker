@@ -177,6 +177,12 @@ public sealed record BalanceCheckDto(
     /// <summary>True while a check a person asked for is waiting or running.</summary>
     public bool Queued { get; init; }
 
+    /// <summary>For a check a person asked for that has not started: what it waits for. Null when it is about to start.</summary>
+    public string? WaitingFor { get; init; }
+
+    /// <summary>When the wait ends, where that is known.</summary>
+    public DateTimeOffset? WaitingUntil { get; init; }
+
     /// <summary>The latest attempts, oldest first.</summary>
     public IReadOnlyList<BalanceAttemptDto> Recent { get; init; } = [];
 }

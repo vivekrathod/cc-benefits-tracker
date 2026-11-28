@@ -35,11 +35,36 @@ public sealed class UdaanCheckerTests : IDisposable
     {
         var udaan = new StubHttp((_, _) => Json(HttpStatusCode.OK, """{ "account": "alex-aa", "status": "ok" }"""));
 
-        var answer = await Checker(udaan).CheckAsync("alex-aa", TimeSpan.FromHours(12.5), Ct);
+        var answer = await Checker(udaan).CheckAsync("alex-aa", TimeSpan.FromHours(12.5), asked: false, Ct);
 
         Assert.Equal(BalanceCheckAnswer.Result("""{ "account": "alex-aa", "status": "ok" }"""), answer);
         var asked = Assert.Single(udaan.Requests);
-        Assert.Equal((HttpMethod.Post, "http://host.docker.internal:8791/checks", """{"account":"alex-aa","max_age":45000}"""), (asked.Method, asked.Url.ToString(), asked.Body));
+        Assert.Equal((HttpMethod.Post, "http://host.docker.internal:8791/checks", """{"account":"alex-aa","max_age":45000,"asked":false}"""), (asked.Method, asked.Url.ToString(), asked.Body));
+    }
+
+    [Fact]
+    public async Task A_check_a_person_asked_for_is_marked_so_udaan_signs_in_at_once()
+    {
+        var udaan = new StubHttp((_, _) => Json(HttpStatusCode.OK, """{ "account": "alex-aa", "status": "ok" }"""));
+
+        await Checker(udaan).CheckAsync("alex-aa", TimeSpan.FromHours(1), asked: true, Ct);
+
+        Assert.Equal("""{"account":"alex-aa","max_age":3600,"asked":true}""", Assert.Single(udaan.Requests).Body);
+    }
+
+    [Theory]
+    [InlineData("""{ "status": "wait", "wait_reason": "busy" }""", BalanceWait.Busy)]
+    [InlineData("""{ "status": "wait", "wait_reason": "gap" }""", BalanceWait.Spacing)]
+    [InlineData("""{ "status": "wait", "wait_reason": "something new" }""", BalanceWait.Unsaid)]
+    [InlineData("""{ "status": "wait", "wait_reason": 7 }""", BalanceWait.Unsaid)]
+    [InlineData("""not json""", BalanceWait.Unsaid)]
+    public async Task Not_now_comes_with_udaans_reason_where_it_gives_one(string body, BalanceWait why)
+    {
+        var udaan = new StubHttp((_, _) => Json(HttpStatusCode.TooManyRequests, body));
+
+        var answer = await Checker(udaan).CheckAsync("alex-aa", TimeSpan.Zero, asked: false, Ct);
+
+        Assert.Equal(BalanceCheckAnswer.ComeBackAt(Clock.Now.AddMinutes(1), why), answer);
     }
 
     [Fact]
@@ -52,7 +77,7 @@ public sealed class UdaanCheckerTests : IDisposable
             return response;
         });
 
-        var answer = await Checker(udaan).CheckAsync("alex-aa", TimeSpan.Zero, Ct);
+        var answer = await Checker(udaan).CheckAsync("alex-aa", TimeSpan.Zero, asked: false, Ct);
 
         Assert.Equal(BalanceCheckAnswer.ComeBackAt(Clock.Now.AddMinutes(14)), answer);
     }
@@ -64,7 +89,7 @@ public sealed class UdaanCheckerTests : IDisposable
     {
         var udaan = new StubHttp((_, _) => Json(status, """{ "ok": false, "status": "usage", "error": "..." }"""));
 
-        var refused = await Assert.ThrowsAsync<BalanceCheckerUnavailableException>(() => Checker(udaan).CheckAsync("alex-aa", TimeSpan.Zero, Ct));
+        var refused = await Assert.ThrowsAsync<BalanceCheckerUnavailableException>(() => Checker(udaan).CheckAsync("alex-aa", TimeSpan.Zero, asked: false, Ct));
 
         Assert.True(refused.Reached);
         Assert.Contains(says, refused.Message);

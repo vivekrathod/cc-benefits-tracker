@@ -70,8 +70,14 @@ Short notes on the choices that are not obvious from the code, newest concerns f
   when an account is due, keeps the history and sends the alerts, because it is the part
   that is always up and has the screens. udaan decides whether a sign-in may happen now:
   one at a time, a quarter of an hour apart, never again after a rejected login. It
-  answers "not now" with a time, and the tracker waits. Neither can talk the other out of
-  its half.
+  answers "not now" with a time and a reason, and the tracker waits. Neither can talk the
+  other out of its half.
+- **A check a person asks for does not rest.** The quarter of an hour between sign-ins
+  spreads out the checks nobody is watching. Somebody who pressed "Check now" is waiting
+  for the answer, as at udaan's own command line, so the tracker tells udaan a person
+  asked and udaan signs in at once. One at a time, the two a day, the pause after a bot
+  wall and the hold after a rejected login still apply. A wait that does remain is shown
+  with its reason and its end, because "waiting" alone reads as stuck.
 - **What is due is worked out from the history, not remembered.** An account is due when
   nothing was heard about it today and the daily time has passed. So a restart neither
   repeats nor skips a check, a result somebody pushed in by hand counts, and there is no

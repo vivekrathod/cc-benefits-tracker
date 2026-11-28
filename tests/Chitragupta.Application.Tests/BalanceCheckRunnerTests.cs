@@ -154,8 +154,70 @@ public class BalanceCheckRunnerTests
         Assert.NotNull(waiting);
         Assert.Equal((BalanceCheckKind.Requested, "United MileagePlus"), (run!.Kind, run.Program));
         Assert.Equal([("alex-united", TimeSpan.FromHours(1))], tracker.Checker.Asked);
+        Assert.Equal(["alex-united"], tracker.Checker.AskedFor);
         var check = Assert.Single((await tracker.Queries.GetBalancesAsync(Ct)).Checks);
         Assert.Equal((1, false, true), (check.SignInsToday, check.Queued, check.CanCheckNow));
+    }
+
+    [Fact]
+    public async Task A_check_somebody_asks_for_does_not_wait_for_the_rest_between_sign_ins()
+    {
+        await using var tracker = await CheckedYesterdayAsync("2026-11-27 12:30", "alex-aa", "alex-alaska", "alex-united");
+        var ok = tracker.Checker.Answer;
+        var rest = tracker.Clock.Now.AddMinutes(15);
+        tracker.Checker.Answer = account => tracker.Checker.Asked.Count == 1 || tracker.Checker.AskedFor.Contains(account)
+            ? ok(account)
+            : BalanceCheckAnswer.ComeBackAt(rest, BalanceWait.Spacing);
+
+        await tracker.Runner.RunDueAsync(Ct);
+        Assert.Null(await tracker.Runner.RunDueAsync(Ct));
+        var resting = tracker.Checker.Asked[1].Account;
+        Assert.Empty(tracker.Checker.AskedFor);
+
+        tracker.Clock.Set("2026-11-27 12:32");
+        await tracker.Runner.RequestAsync(resting, Ct);
+        var waiting = (await tracker.Queries.GetBalancesAsync(Ct)).Checks.Single(check => check.Queued);
+        var run = await tracker.Runner.RunDueAsync(Ct);
+
+        Assert.Equal((null, null), (waiting.WaitingFor, waiting.WaitingUntil));
+        Assert.Equal(BalanceCheckKind.Requested, run!.Kind);
+        Assert.Equal([resting], tracker.Checker.AskedFor);
+
+        // The day's own checks still keep the time the automation asked for.
+        tracker.Clock.Set("2026-11-27 12:44");
+        Assert.Null(await tracker.Runner.RunDueAsync(Ct));
+        Assert.Equal(3, tracker.Checker.Asked.Count);
+        tracker.Checker.Answer = ok;
+        tracker.Clock.Set("2026-11-27 12:45");
+        Assert.Equal(BalanceCheckKind.Scheduled, (await tracker.Runner.RunDueAsync(Ct))!.Kind);
+    }
+
+    [Fact]
+    public async Task A_check_that_has_to_wait_says_what_for_and_until_when()
+    {
+        await using var tracker = await CheckedYesterdayAsync("2026-11-27 09:00", "alex-aa", "alex-united");
+        var ok = tracker.Checker.Answer;
+        tracker.Checker.Answer = _ => BalanceCheckAnswer.ComeBackAt(tracker.Clock.Now.AddMinutes(1), BalanceWait.Busy);
+
+        await tracker.Runner.RequestAsync("alex-united", Ct);
+        await tracker.Runner.RequestAsync("alex-aa", Ct);
+        Assert.Null(await tracker.Runner.RunDueAsync(Ct));
+        tracker.Clock.Set("2026-11-27 09:00:30");
+        Assert.Null(await tracker.Runner.RunDueAsync(Ct));
+
+        var waiting = (await tracker.Queries.GetBalancesAsync(Ct)).Checks;
+        Assert.All(waiting, check => Assert.True(check.Queued));
+        Assert.All(waiting, check => Assert.Contains("outside the tracker", check.WaitingFor));
+        Assert.All(waiting, check => Assert.Equal(tracker.Clock.ToLocal(tracker.Clock.Now.AddSeconds(30)), check.WaitingUntil));
+        Assert.Equal(["alex-united"], tracker.Checker.AskedFor);
+
+        tracker.Checker.Answer = ok;
+        tracker.Clock.Set("2026-11-27 09:01");
+        var behind = (await tracker.Queries.GetBalancesAsync(Ct)).Checks.Single(check => check.Account == "alex-aa");
+        Assert.Equal(("Another check you asked for goes first.", null), (behind.WaitingFor, behind.WaitingUntil));
+        Assert.Equal("United MileagePlus", (await tracker.Runner.RunDueAsync(Ct))!.Program);
+        Assert.Equal("American AAdvantage", (await tracker.Runner.RunDueAsync(Ct))!.Program);
+        Assert.DoesNotContain((await tracker.Queries.GetBalancesAsync(Ct)).Checks, check => check.Queued || check.WaitingFor is not null);
     }
 
     [Fact]
@@ -236,6 +298,22 @@ public class BalanceCheckRunnerTests
         tracker.Checker.Accounts.AddRange(accounts);
         tracker.Checker.Answer = account => BalanceCheckAnswer.Result(
             Udaan.Ok(account, account.Split('-')[1], "alex", 1_000, tracker.Clock.Now.ToString("o")));
+        return tracker;
+    }
+
+    /// <summary>The same, with every account checked the day before, so each has its line on the screen.</summary>
+    private static async Task<Tracker> CheckedYesterdayAsync(string now, params string[] accounts)
+    {
+        var tracker = await StartAsync(now, accounts);
+        tracker.Clock.Advance(TimeSpan.FromDays(-1));
+        tracker.Clock.Set($"{tracker.Clock.Today:yyyy-MM-dd} 13:00");
+        foreach (var _ in accounts)
+        {
+            await tracker.Runner.RunDueAsync(Ct);
+        }
+
+        tracker.Checker.Asked.Clear();
+        tracker.Clock.Set(now);
         return tracker;
     }
 

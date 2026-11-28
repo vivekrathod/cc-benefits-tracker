@@ -71,6 +71,9 @@ internal sealed class FakeChecker : IBalanceChecker
 
     public List<(string Account, TimeSpan MaxAge)> Asked { get; } = [];
 
+    /// <summary>The accounts asked about on a person's behalf.</summary>
+    public List<string> AskedFor { get; } = [];
+
     public Func<string, BalanceCheckAnswer> Answer { get; set; } = _ => throw new InvalidOperationException("The test set up no answer.");
 
     /// <summary>Accounts are named "owner-program", as udaan names them.</summary>
@@ -79,9 +82,14 @@ internal sealed class FakeChecker : IBalanceChecker
             ? Task.FromResult<IReadOnlyList<CheckerAccount>>(Accounts.Select(name => new CheckerAccount(name, name.Split('-')[^1])).ToArray())
             : throw new BalanceCheckerUnavailableException(Outage);
 
-    public Task<BalanceCheckAnswer> CheckAsync(string account, TimeSpan maxAge, CancellationToken cancellationToken)
+    public Task<BalanceCheckAnswer> CheckAsync(string account, TimeSpan maxAge, bool asked, CancellationToken cancellationToken)
     {
         Asked.Add((account, maxAge));
+        if (asked)
+        {
+            AskedFor.Add(account);
+        }
+
         return Task.FromResult(Answer(account));
     }
 }

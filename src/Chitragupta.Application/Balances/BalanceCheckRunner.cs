@@ -10,6 +10,8 @@ namespace Chitragupta.Application.Balances;
 /// a person asked, the daily time has passed with nothing heard today, or today's failure
 /// is of a kind that may clear by itself and its one retry has waited long enough.
 /// Two accounts of one program are kept as far apart in the day's order as the list allows.
+/// A check a person asked for starts at once, unless a sign-in is running. The time the automation
+/// lets pass between sign-ins holds back only the checks nobody is waiting for.
 /// </summary>
 public sealed class BalanceCheckRunner(
     IBalanceChecker checker,
@@ -78,7 +80,9 @@ public sealed class BalanceCheckRunner(
         state.Reachable(accounts.Select(account => account.Name).ToArray(), now);
 
         var known = state.Read();
-        if (known.NotBefore > now || await NextAsync(accounts, known.Requested, now, cancellationToken) is not (var account, var kind, var maxAge))
+        var unasked = known.Pause?.Holds(now, requested: false) != true;
+        if (known.Pause?.Holds(now, requested: true) == true
+            || await NextAsync(accounts, known.Requested, unasked, now, cancellationToken) is not (var account, var kind, var maxAge))
         {
             return null;
         }
@@ -86,10 +90,10 @@ public sealed class BalanceCheckRunner(
         state.Started(account);
         try
         {
-            var answer = await checker.CheckAsync(account, maxAge, cancellationToken);
+            var answer = await checker.CheckAsync(account, maxAge, asked: kind == BalanceCheckKind.Requested, cancellationToken);
             if (answer.Report is null)
             {
-                state.Deferred(answer.NotBefore ?? now + AfterTrouble);
+                state.Deferred(new BalancePause(answer.NotBefore ?? now + AfterTrouble, answer.Why));
                 return null;
             }
 
@@ -103,7 +107,7 @@ public sealed class BalanceCheckRunner(
         {
             // Whether a sign-in happened is not known, so nothing is asked for a while. A person's request is dropped
             // and not kept for later: a sign-in nobody is waiting for any more would only be a surprise.
-            state.Finished(account, failure.Message, now + AfterTrouble);
+            state.Finished(account, failure.Message, new BalancePause(now + AfterTrouble, BalanceWait.Trouble));
             return null;
         }
         catch
@@ -116,9 +120,10 @@ public sealed class BalanceCheckRunner(
     /// <summary>
     /// The account to ask about, why, and how old a reading may be to do without a sign-in: anything
     /// read today for the day's check, anything read since the failure for a retry.
+    /// With <paramref name="unasked"/> false, only what a person asked for is looked at.
     /// </summary>
     private async Task<(string Account, BalanceCheckKind Kind, TimeSpan MaxAge)?> NextAsync(
-        IReadOnlyList<CheckerAccount> accounts, IReadOnlyList<string> requested, DateTimeOffset now, CancellationToken cancellationToken)
+        IReadOnlyList<CheckerAccount> accounts, IReadOnlyList<string> requested, bool unasked, DateTimeOffset now, CancellationToken cancellationToken)
     {
         var today = clock.Today;
         var attempts = await store.GetBalanceAttemptsAsync(now - now.TimeOfDay, cancellationToken);
@@ -133,6 +138,11 @@ public sealed class BalanceCheckRunner(
             }
 
             state.Drop(account);
+        }
+
+        if (!unasked)
+        {
+            return null;
         }
 
         if (TimeOnly.FromTimeSpan(now.TimeOfDay) >= settings.BalanceCheckAt

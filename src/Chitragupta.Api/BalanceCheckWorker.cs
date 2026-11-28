@@ -22,6 +22,7 @@ internal sealed class BalanceCheckWorker(
         }
 
         var answering = true;
+        var waitingUntil = DateTimeOffset.MinValue;
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -41,6 +42,15 @@ internal sealed class BalanceCheckWorker(
                     {
                         logger.LogWarning("The balance automation is not answering: {Problem}", known.Problem);
                     }
+                }
+
+                // A wait is said once, with its reason, so "why did nothing run" has an answer in the log.
+                if (known.Pause is { } pause && pause.Until > waitingUntil)
+                {
+                    waitingUntil = pause.Until;
+                    logger.LogInformation(
+                        "Balance checks wait until {Until:HH:mm:ss} UTC ({Why}){Scope}.",
+                        pause.Until.UtcDateTime, pause.Why, pause.HoldsRequests ? "" : "; a check somebody asks for still runs");
                 }
 
                 if (run is not null)

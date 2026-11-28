@@ -104,6 +104,10 @@
                                         <span class="mark @Mark(attempt)" title="@Format.Time(attempt.CheckedAt): @Format.Attempt(attempt)"></span>
                                     }
                                 </div>
+                                @if (Note(check) is { } note)
+                                {
+                                    <div class="muted">@note</div>
+                                }
                             </td>
                             <td class="num">
                                 <span class="chip @(check.Status != "Ok" ? "now" : check.Overdue ? "soon" : "done")">
@@ -112,7 +116,7 @@
                                 <div class="actions end">
                                     @if (check.Queued)
                                     {
-                                        <span class="muted">@(_view.Checker?.Running == check.Account ? "checking…" : "waiting its turn…")</span>
+                                        <span class="muted">@Progress(check)</span>
                                     }
                                     else if (check.CanCheckNow)
                                     {
@@ -131,8 +135,9 @@
             @if (_view.Checker is { } checker)
             {
                 <p class="muted">
-                    Each account is checked once a day from @Format.TimeOfDay(checker.DailyAt), one at a time. A sign-in is tried at most
-                    @checker.SignInsPerDay times a day for an account, "Check now" included, to stay clear of lockouts.
+                    Each account is checked once a day from @Format.TimeOfDay(checker.DailyAt), one at a time. "Check now" starts at once
+                    unless a sign-in is running. A sign-in is tried at most @checker.SignInsPerDay times a day for an account,
+                    "Check now" included, to stay clear of lockouts.
                 </p>
             }
         </div>
@@ -159,6 +164,20 @@
         _leaving.Cancel();
         _leaving.Dispose();
     }
+
+    /// <summary>Where a check somebody asked for stands, in a few words. The reason for a wait goes under the account, where it has room.</summary>
+    private string Progress(BalanceCheckDto check) =>
+        _view?.Checker?.Running == check.Account ? "checking…"
+        : check.WaitingFor is null ? "starting…"
+        : check.WaitingUntil is { } until ? $"waiting until {Format.TimeOfDay(TimeOnly.FromDateTime(until.DateTime))}"
+        : "waiting…";
+
+    /// <summary>Why a check is not running, or why it cannot be asked for: a wait's reason, or the day's limit.</summary>
+    private string? Note(BalanceCheckDto check) =>
+        check.Queued ? check.WaitingFor
+        : _view?.Checker is { UnreachableSince: null } checker && check.SignInsToday >= checker.SignInsPerDay
+            ? $"Today's {checker.SignInsPerDay} sign-ins are used, so it can be checked again tomorrow."
+            : null;
 
     private static string Mark(BalanceAttemptDto attempt) => attempt.Status == "Ok" ? "ok" : attempt.SignedIn ? "bad" : "skip";
 

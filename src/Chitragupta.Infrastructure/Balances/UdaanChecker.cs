@@ -44,21 +44,43 @@ internal sealed class UdaanChecker(HttpClient http, UdaanOptions options, IClock
         }
     }
 
-    public async Task<BalanceCheckAnswer> CheckAsync(string account, TimeSpan maxAge, CancellationToken cancellationToken)
+    public async Task<BalanceCheckAnswer> CheckAsync(string account, TimeSpan maxAge, bool asked, CancellationToken cancellationToken)
     {
         using var request = Request(HttpMethod.Post, "checks");
-        request.Content = JsonContent.Create(new { account, max_age = (long)maxAge.TotalSeconds });
+        request.Content = JsonContent.Create(new { account, max_age = (long)maxAge.TotalSeconds, asked });
 
         using var response = await SendAsync(request, cancellationToken, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
         return response.StatusCode switch
         {
             HttpStatusCode.OK => BalanceCheckAnswer.Result(body),
-            // "Not now": another sign-in is running or ended too recently. udaan says when to come back.
+            // "Not now": another sign-in is running or ended too recently. udaan says when to come back, and which it is.
             HttpStatusCode.TooManyRequests => BalanceCheckAnswer.ComeBackAt(
-                clock.Now + (response.Headers.RetryAfter?.Delta ?? TimeSpan.FromMinutes(1))),
+                clock.Now + (response.Headers.RetryAfter?.Delta ?? TimeSpan.FromMinutes(1)), WhyWait(body)),
             var other => throw Refused(other),
         };
+    }
+
+    private static BalanceWait WhyWait(string body)
+    {
+        try
+        {
+            using var said = JsonDocument.Parse(body);
+            return said.RootElement.ValueKind == JsonValueKind.Object
+                && said.RootElement.TryGetProperty("wait_reason", out var reason)
+                && reason.ValueKind == JsonValueKind.String
+                    ? reason.GetString() switch
+                    {
+                        "busy" => BalanceWait.Busy,
+                        "gap" => BalanceWait.Spacing,
+                        _ => BalanceWait.Unsaid,
+                    }
+                    : BalanceWait.Unsaid;
+        }
+        catch (JsonException)
+        {
+            return BalanceWait.Unsaid;
+        }
     }
 
     private HttpRequestMessage Request(HttpMethod method, string path)

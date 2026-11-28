@@ -149,8 +149,12 @@ UDAAN_URL=http://host.docker.internal:8791
   on the Points screen included. "Check now" takes a reading udaan made in the last hour as
   it is, so one just taken by hand on the desktop arrives without a second sign-in.
 - udaan keeps the rules that protect an account (one sign-in at a time, a quarter of an
-  hour between two, a hold after a rejected login) and answers "not now" when one applies.
-  The tracker waits for the time it is given.
+  hour between two that nobody asked for, a hold after a rejected login) and answers "not
+  now" when one applies. The tracker waits for the time it is given.
+- "Check now" starts at once: a person is waiting, so the quarter of an hour does not apply
+  to it (udaan 0.3.5 and later). It waits only while another sign-in runs, and then the
+  Points screen says what it waits for and until when. When the day's two sign-ins are used,
+  the screen says that in place of the button.
 
 **What you see.** Every attempt is kept for 90 days. The Points screen shows each account's
 recent attempts, what went wrong in plain words, and what to do about it. A balance the
