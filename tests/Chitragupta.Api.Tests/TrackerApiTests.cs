@@ -254,6 +254,8 @@ public sealed class TrackerApiTests : IDisposable
         var ask = (await answer.Content.ReadFromJsonAsync<EmailSignInDto>(Ct))!.Url;
         Assert.StartsWith("https://accounts.google.com/o/oauth2/auth?client_id=made-up-client&redirect_uri=http%3A%2F%2Flocalhost%3A8090%2F&", ask);
         Assert.DoesNotContain("made-up-secret", ask);
+        // The address goes out as a browser or any other client can take it: nothing in it left unescaped.
+        Assert.Contains("scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fgmail.send%20openid%20email&", ask);
 
         // Google sends the browser back to the app's own address, which serves the app; the app hands the code over.
         Assert.Contains("<title>Chitragupta</title>", await withClient.GetStringAsync("/?state=made-up&code=made-up", Ct));

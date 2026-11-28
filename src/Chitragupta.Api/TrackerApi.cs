@@ -191,7 +191,7 @@ internal static class TrackerApi
         // Email alerts
         api.MapGet("/email", (EmailAlerts email) => email.Read());
         api.MapPost("/email/sign-in", (BeginEmailSignInRequest request, EmailAlerts email) =>
-            new EmailSignInDto(email.BeginSignIn(request.ReturnTo).ToString()));
+            new EmailSignInDto(email.BeginSignIn(request.ReturnTo).AbsoluteUri));
         api.MapPost("/email/sign-in/complete", (CompleteEmailSignInRequest request, EmailAlerts email, CancellationToken ct) =>
             email.CompleteSignInAsync(request.State, request.Code, ct));
         api.MapPost("/email/test", async (EmailAlerts email, CancellationToken ct) =>
