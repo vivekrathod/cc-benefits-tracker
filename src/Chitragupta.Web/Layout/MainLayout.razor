@@ -1,6 +1,7 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 @inject TrackerClient Api
+@inject NavigationManager Navigation
 
 <header class="top">Chitragupta</header>
 
@@ -23,6 +24,17 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Google sends an email sign-in back to the app's own address. Manage is where it was started
+        // and where it is finished.
+        var back = new Uri(Navigation.Uri);
+        if (Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith('?')
+            && System.Web.HttpUtility.ParseQueryString(back.Query) is var query
+            && query["state"] is not null
+            && (query["code"] ?? query["error"]) is not null)
+        {
+            Navigation.NavigateTo("manage" + back.Query, replace: true);
+        }
+
         Api.Changed += Refresh;
         await LoadAsync();
     }

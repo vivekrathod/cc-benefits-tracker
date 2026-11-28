@@ -14,8 +14,9 @@ services:
       Chitragupta__SimpleFin__AccessUrlFile: /run/secrets/simplefin-access-url
       Chitragupta__Reminders__To__0: ${REMINDER_TO_1:-}
       Chitragupta__Reminders__To__1: ${REMINDER_TO_2:-}
-      # Reminders go through Gmail from the moment this file exists, else by SMTP when a host is set, else to the log.
-      Chitragupta__Gmail__TokenFile: /run/secrets/gmail-send-token.json
+      # Reminders go through Gmail once "Set up email alerts" was approved, else by SMTP when a host is set, else
+      # to the log. The approval asks Google as this client; what it ends in is kept in the data folder.
+      Chitragupta__Gmail__ClientFile: /run/secrets/google-oauth-client.json
       Chitragupta__Smtp__PasswordFile: /run/secrets/smtp-password
       Chitragupta__Smtp__Host: ${SMTP_HOST:-}
       Chitragupta__Smtp__Port: ${SMTP_PORT:-587}

@@ -37,3 +37,9 @@ public sealed record DismissReviewRequest(string? IgnoreKeyword);
 
 /// <summary>Sets a miles or points balance by hand, as it stands now. The expiry day is optional.</summary>
 public sealed record RecordBalanceRequest(Guid PersonId, string Program, long Amount, DateOnly? ExpiresOn);
+
+/// <summary>Starts the approval for sending mail. The browser is sent back to this address afterwards.</summary>
+public sealed record BeginEmailSignInRequest(string ReturnTo);
+
+/// <summary>What the browser came back with from the approval.</summary>
+public sealed record CompleteEmailSignInRequest(string State, string Code);

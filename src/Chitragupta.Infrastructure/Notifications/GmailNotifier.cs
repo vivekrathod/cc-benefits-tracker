@@ -8,7 +8,7 @@ namespace Chitragupta.Infrastructure.Notifications;
 
 /// <summary>
 /// Reminders through the Gmail API, sent as the account that approved it. The token file is the
-/// one "udaan gmail-login --send" writes: it can send and can read nothing. It is read each time,
+/// one <see cref="GmailSignIn"/> writes: it can send and can read nothing. It is read each time,
 /// so a new sign-in takes effect without a restart, and nothing from it is ever logged.
 /// </summary>
 internal sealed class GmailNotifier(HttpClient http, GmailOptions options, IReadOnlyList<string> recipients) : INotifier
@@ -30,7 +30,7 @@ internal sealed class GmailNotifier(HttpClient http, GmailOptions options, IRead
         if (to.Count == 0)
         {
             throw new InvalidOperationException(
-                "There is no address to send reminders to. Set REMINDER_TO_1, or sign in again with \"udaan gmail-login --send --email <address>\".");
+                "There is no address to send reminders to. Set REMINDER_TO_1, or set up email alerts again under Manage.");
         }
 
         var access = await AccessTokenAsync(token, cancellationToken);
@@ -86,7 +86,7 @@ internal sealed class GmailNotifier(HttpClient http, GmailOptions options, IRead
         if (!response.IsSuccessStatusCode)
         {
             throw new InvalidOperationException(
-                $"Google did not renew the Gmail sign-in ({(int)response.StatusCode}). Where udaan runs, run \"udaan gmail-login --send\" again.");
+                $"Google did not renew the Gmail sign-in ({(int)response.StatusCode}). Set up email alerts again under Manage.");
         }
 
         using var answer = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));

@@ -1,6 +1,7 @@
 using Chitragupta.Application;
 using Chitragupta.Application.Balances;
 using Chitragupta.Application.Cards;
+using Chitragupta.Application.Email;
 using Chitragupta.Application.Matching;
 using Chitragupta.Application.Ports;
 using Chitragupta.Application.Reminders;
@@ -75,8 +76,12 @@ public static class TrackerServices
         services.AddSingleton<BalanceCheckRunner>();
 
         var recipients = options.ReminderRecipients;
+        options.Gmail.TokenFile ??= Path.Combine(options.DataDirectory, "gmail-token.json");
         services.AddSingleton<LogNotifier>();
         services.AddHttpClient(nameof(GmailNotifier), http => http.Timeout = TimeSpan.FromSeconds(30));
+        services.AddSingleton<IEmailSignIn>(provider => new GmailSignIn(
+            provider.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(GmailNotifier)), options.Gmail));
+        services.AddSingleton<EmailAlerts>();
         services.AddSingleton<INotifier>(provider => new FirstReadyNotifier(
             new GmailNotifier(
                 provider.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(GmailNotifier)), options.Gmail, recipients),

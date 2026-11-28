@@ -1,6 +1,7 @@
 using Chitragupta.Application;
 using Chitragupta.Application.Balances;
 using Chitragupta.Application.Cards;
+using Chitragupta.Application.Email;
 using Chitragupta.Application.Matching;
 using Chitragupta.Application.Ports;
 using Chitragupta.Application.Review;
@@ -185,6 +186,23 @@ internal static class TrackerApi
                 "Balance results pushed in: {Count} accounts, {Ok} ok, {Kept} readings kept.",
                 lines.Count, lines.Count(line => line.Status == "Ok"), lines.Count(line => line.Recorded));
             return Results.Ok(lines);
+        });
+
+        // Email alerts
+        api.MapGet("/email", (EmailAlerts email) => email.Read());
+        api.MapPost("/email/sign-in", (BeginEmailSignInRequest request, EmailAlerts email) =>
+            new EmailSignInDto(email.BeginSignIn(request.ReturnTo).ToString()));
+        api.MapPost("/email/sign-in/complete", (CompleteEmailSignInRequest request, EmailAlerts email, CancellationToken ct) =>
+            email.CompleteSignInAsync(request.State, request.Code, ct));
+        api.MapPost("/email/test", async (EmailAlerts email, CancellationToken ct) =>
+        {
+            await email.SendTestAsync(ct);
+            return Results.NoContent();
+        });
+        api.MapDelete("/email", (EmailAlerts email) =>
+        {
+            email.Disconnect();
+            return Results.NoContent();
         });
 
         // Sync

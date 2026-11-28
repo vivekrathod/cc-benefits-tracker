@@ -1,0 +1,133 @@
+@* Setting up the mail that reminders and alerts go out by. The approval happens at Google, in this
+   browser, and Google sends the browser back to the app's own address with a code (MainLayout hands
+   it on to this page). *@
+@inject TrackerClient Api
+@inject NavigationManager Navigation
+
+<h2>Email alerts</h2>
+<div class="card">
+    @if (_error is not null)
+    {
+        <p class="error">@_error</p>
+    }
+    @if (_note is not null)
+    {
+        <p class="note">@_note</p>
+    }
+
+    @if (_email is null)
+    {
+        @if (_error is null)
+        {
+            <p class="loading">Loading…</p>
+        }
+    }
+    else if (_email.IsSetUp)
+    {
+        <p>
+            Alerts about balance checks, and reminders about benefits and miles, are sent from
+            <strong>@(_email.Account ?? "your Google account")</strong>.
+        </p>
+        <p class="muted">The approval can send mail as that account. It cannot read any.</p>
+        <div class="actions">
+            <button disabled="@_busy" @onclick="TestAsync">Send a test email</button>
+            <button class="quiet" disabled="@_busy" @onclick="TurnOffAsync">Turn off</button>
+        </div>
+    }
+    else if (_email.CanSetUp)
+    {
+        <p class="muted">
+            Get an email when a balance check needs you, along with the reminders about benefits and miles.
+            Google asks you to approve sending mail as you. Nothing here can read your mail.
+        </p>
+        <div class="actions">
+            <button class="primary" disabled="@_busy" @onclick="BeginAsync">Set up email alerts</button>
+        </div>
+    }
+    else
+    {
+        <p class="muted">
+            Email alerts need a Google client first: a file named google-oauth-client.json in the secrets folder.
+            The README has the steps. Until then nothing is emailed, and everything still shows in the app.
+        </p>
+    }
+</div>
+
+@code {
+    private EmailAlertsDto? _email;
+    private string? _error;
+    private string? _note;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var back = System.Web.HttpUtility.ParseQueryString(new Uri(Navigation.Uri).Query);
+        if (back["state"] is { } state && (back["code"] ?? back["error"]) is not null)
+        {
+            await RunAsync(async () =>
+            {
+                if (back["code"] is not { } code)
+                {
+                    throw new ApiException("Google did not approve sending, so nothing was set up.");
+                }
+
+                _email = await Api.PostAsync<EmailAlertsDto>("api/email/sign-in/complete", new CompleteEmailSignInRequest(state, code));
+                _note = "Email alerts are set up. Send a test email to see one arrive.";
+            });
+
+            // The code is used up. It should not stay in the address bar or in the history.
+            Navigation.NavigateTo("manage", replace: true);
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _email = await Api.GetAsync<EmailAlertsDto>("api/email");
+        }
+        catch (Exception failure) when (failure is ApiException or HttpRequestException)
+        {
+            _error ??= Format.Failure(failure);
+        }
+    }
+
+    private Task BeginAsync() => RunAsync(async () =>
+    {
+        var ask = await Api.PostAsync<EmailSignInDto>("api/email/sign-in", new BeginEmailSignInRequest(Navigation.BaseUri));
+        Navigation.NavigateTo(ask.Url, forceLoad: true);
+    });
+
+    private Task TestAsync() => RunAsync(async () =>
+    {
+        await Api.PostAsync("api/email/test");
+        _note = "Sent. It should be in the inbox within a minute.";
+    });
+
+    private Task TurnOffAsync() => RunAsync(async () =>
+    {
+        await Api.DeleteAsync("api/email");
+        await LoadAsync();
+    });
+
+    private async Task RunAsync(Func<Task> change)
+    {
+        _busy = true;
+        _error = null;
+        _note = null;
+        try
+        {
+            await change();
+        }
+        catch (Exception failure) when (failure is ApiException or HttpRequestException)
+        {
+            _error = Format.Failure(failure);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

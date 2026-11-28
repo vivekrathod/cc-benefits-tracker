@@ -74,7 +74,7 @@ public sealed class GmailNotifierTests : IDisposable
 
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => Notifier(google, []).SendAsync(new Notification("Hello", "Body"), Ct));
 
-        Assert.Contains("udaan gmail-login --send", failure.Message);
+        Assert.Contains("Set up email alerts again", failure.Message);
         Assert.DoesNotContain("made-up", failure.Message);
     }
 

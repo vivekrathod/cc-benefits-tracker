@@ -86,8 +86,14 @@ public sealed class ReminderOptions
 public sealed class GmailOptions
 {
     /// <summary>
-    /// A file holding a send-only Gmail token, as "udaan gmail-login --send" writes it. While the
-    /// file exists, reminders go this way. The token can send as the account and can read nothing.
+    /// Google's OAuth client, as its console downloads it. With one in place, "Set up email alerts"
+    /// can ask a person for approval to send.
+    /// </summary>
+    public string? ClientFile { get; set; }
+
+    /// <summary>
+    /// Where the approval is kept: a token that can send as the account and can read nothing.
+    /// Left out, it is gmail-token.json in the data folder. While the file exists, reminders go this way.
     /// </summary>
     public string? TokenFile { get; set; }
 }

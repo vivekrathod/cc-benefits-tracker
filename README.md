@@ -98,10 +98,23 @@ Sunday morning. An alert goes out when an automatic balance check needs somebody
 
 Reminders go out the first way that is set up:
 
-1. **Gmail.** Put a send-only Gmail token in the secrets folder as `gmail-send-token.json`.
-   udaan makes one with a single consent click:
-   `udaan gmail-login --send --email you@gmail.com --out <secrets>/gmail-send-token.json`.
-   The token can send as that account and can read nothing. It is picked up without a restart.
+1. **Gmail.** Under Manage, "Set up email alerts" sends you to Google to approve sending
+   mail as you, and that is all it asks for: the approval cannot read mail. It is kept in
+   the data folder as `gmail-token.json`, works without a restart, and "Turn off" deletes
+   it. "Send a test email" shows one arriving.
+
+   Google needs to know which app is asking, so the button appears once an OAuth client is
+   in the secrets folder as `google-oauth-client.json`:
+   - With udaan on the same machine, it already has one:
+     `udaan gmail-client --copy-to <secrets>/google-oauth-client.json`.
+   - Otherwise, in the Google Cloud console: enable the Gmail API, set up the consent screen
+     with yourself as a user, create an OAuth client of type "Desktop app" and download its
+     JSON. Publish the consent screen ("In production"); while it is in "Testing", Google
+     ends every approval after a week.
+
+   With a desktop client, do the setup in a browser on the machine that runs the service,
+   with the app opened as `http://localhost:<port>`: Google sends such a sign-in back only
+   to that address. After that, mail goes out however the app is opened.
 2. **SMTP.** Set the `SMTP_*` values in `.env` and put the password in `secrets/smtp-password`.
 3. **The log**, when neither is set up.
 
@@ -189,7 +202,8 @@ Everything is under the `Chitragupta` section (`Chitragupta__Name` as an environ
 | `Reminders:BalanceNudgeDaysBefore` | `90, 30` | Days before miles or points lapse |
 | `Reminders:DigestDay`, `DigestAt` | `Sunday`, `09:00` | Weekly digest |
 | `Reminders:To` | none | Who reminders are written to |
-| `Gmail:TokenFile` | none | A send-only Gmail token; reminders go this way while the file exists |
+| `Gmail:ClientFile` | none | Google's OAuth client file, which "Set up email alerts" asks as |
+| `Gmail:TokenFile` | `gmail-token.json` in the data folder | Where the approval to send is kept; reminders go this way while it exists |
 | `Smtp:Host`, `Port`, `User`, `PasswordFile`, `From` | none | Reminders by SMTP |
 | `Udaan:Url`, `TokenFile` | none | Where `udaan serve` answers, and the file holding its token |
 | `Balances:DailyAt` | `12:30` | From when each account is checked once a day |

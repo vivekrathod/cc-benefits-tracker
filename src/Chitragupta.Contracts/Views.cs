@@ -193,3 +193,12 @@ public sealed record BalancesDto(
 
 /// <summary>What became of one account in an automation's output. <c>Recorded</c> is false when the reading was already known.</summary>
 public sealed record BalanceImportLineDto(string Account, string Status, bool Recorded, string? Problem);
+
+/// <summary>How reminders and alerts leave by email.</summary>
+/// <param name="CanSetUp">Whether the service has what a sign-in needs.</param>
+/// <param name="IsSetUp">Whether somebody approved sending.</param>
+/// <param name="Account">The mailbox that sends, when known.</param>
+public sealed record EmailAlertsDto(bool CanSetUp, bool IsSetUp, string? Account);
+
+/// <summary>Where to send the browser to approve sending mail.</summary>
+public sealed record EmailSignInDto(string Url);

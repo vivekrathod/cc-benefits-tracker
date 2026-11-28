@@ -235,6 +235,33 @@ public sealed class TrackerApiTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task Email_alerts_are_set_up_from_the_app_once_a_google_client_is_in_place()
+    {
+        // A fresh install has no Google client, so there is nothing to start and nothing to try.
+        Assert.Equal(new EmailAlertsDto(false, false, null), await GetAsync<EmailAlertsDto>("/api/email"));
+        var start = new BeginEmailSignInRequest("http://localhost:8090/");
+        Assert.Equal(HttpStatusCode.BadRequest, (await _client.PostAsJsonAsync("/api/email/sign-in", start, Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await _client.PostAsync("/api/email/test", null, Ct)).StatusCode);
+
+        var client = Path.Combine(_folder, "google-oauth-client.json");
+        await File.WriteAllTextAsync(client, """{ "installed": { "client_id": "made-up-client", "client_secret": "made-up-secret" } }""", Ct);
+        using var factory = _factory.WithWebHostBuilder(host => host.UseSetting("Chitragupta:Gmail:ClientFile", client));
+        using var withClient = factory.CreateClient();
+
+        Assert.Equal(new EmailAlertsDto(true, false, null), await withClient.GetFromJsonAsync<EmailAlertsDto>("/api/email", Ct));
+        var answer = await withClient.PostAsJsonAsync("/api/email/sign-in", start, Ct);
+        var ask = (await answer.Content.ReadFromJsonAsync<EmailSignInDto>(Ct))!.Url;
+        Assert.StartsWith("https://accounts.google.com/o/oauth2/auth?client_id=made-up-client&redirect_uri=http%3A%2F%2Flocalhost%3A8090%2F&", ask);
+        Assert.DoesNotContain("made-up-secret", ask);
+
+        // Google sends the browser back to the app's own address, which serves the app; the app hands the code over.
+        Assert.Contains("<title>Chitragupta</title>", await withClient.GetStringAsync("/?state=made-up&code=made-up", Ct));
+        var finish = await withClient.PostAsJsonAsync("/api/email/sign-in/complete", new CompleteEmailSignInRequest("not-the-state", "made-up"), Ct);
+        Assert.Equal(HttpStatusCode.BadRequest, finish.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await withClient.DeleteAsync("/api/email", Ct)).StatusCode);
+    }
+
     private async Task<T> GetAsync<T>(string url) => (await _client.GetFromJsonAsync<T>(url, Ct))!;
 
     private async Task<T> PostAsync<T>(string url, object body)

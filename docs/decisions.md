@@ -99,9 +99,18 @@ Short notes on the choices that are not obvious from the code, newest concerns f
   that repeats daily is one email, then one more if it lasts two days, then one when it
   clears. Alerts are plain rules over the history. Nothing with judgement sits between a
   failure and the email about it.
-- **Reminders go through the Gmail API with a token that can only send.** No password is
-  stored, and the token cannot read mail. The way out is picked when a reminder is sent,
-  so signing in takes effect without a restart.
+- **Reminders go through the Gmail API with an approval that can only send.** No password
+  is stored, and the approval cannot read mail. The way out is picked when a reminder is
+  sent, so approving takes effect without a restart.
+- **The service asks for that approval itself**, from a button under Manage, and keeps it
+  in the data folder. It is the one that decides to send, so it owns the consent and the
+  token; nothing is borrowed from udaan's mailbox access, which only reads. The message
+  that udaan is down must also not need udaan.
+- **Google sends the browser back to the app's own front page**, and the app hands the
+  code to the API. A desktop OAuth client may only come back to this computer, on any
+  port, and the front page is the one address that is certain to be accepted and that a
+  saved copy of the app also answers. The sign-in is therefore started from
+  `http://localhost` on the machine that runs the service, once.
 - **An owner is matched to a person by name**, whole or first, and only when exactly one
   person fits. Anyone else waits: a result never creates a person, as a feed account
   never creates a card.
